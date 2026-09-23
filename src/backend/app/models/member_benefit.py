@@ -21,6 +21,8 @@ class MemberBenefit(Base):
     member_id: Mapped[int] = mapped_column(ForeignKey("members.id"))
     benefit_id: Mapped[int] = mapped_column(ForeignKey("benefits.id"))
     election_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    # Stage 5: computed premium (election_amount × benefit.premium_rate).
+    premium: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: dt.datetime.now(dt.timezone.utc)
     )

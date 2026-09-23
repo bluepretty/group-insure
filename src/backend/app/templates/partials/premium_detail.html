@@ -1,0 +1,53 @@
+{% if member is none %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Premium Detail</h2>
+</div>
+<p class="text-muted">No member selected. Choose an enrolled member to view their premium.</p>
+{% else %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Premium Detail — Member {{ member.id }}</h2>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Member</dt>
+      <dd class="col-sm-8">{{ member.first_name }} {{ member.last_name }} <span class="text-muted small">({{ member.member_number }})</span></dd>
+
+      <dt class="col-sm-4">Benefit</dt>
+      {% if election is not none %}
+      <dd class="col-sm-8"><span class="badge bg-primary rounded-pill">{{ election.benefit.code }}</span> <span class="text-muted small">#{{ election.benefit_id }}</span></dd>
+      {% else %}
+      <dd class="col-sm-8 text-muted">No benefit elected</dd>
+      {% endif %}
+
+      <dt class="col-sm-4">Premium</dt>
+      <dd class="col-sm-8">
+        {% if election is not none and election.election_amount is not none %}
+        <span class="h5 mb-0">${{ "%.2f"|format(premium) }}</span>
+        <span class="text-muted small">— {{ election.election_amount }} × {{ election.benefit.premium_rate }}</span>
+        {% else %}
+        <span class="text-muted">Not priced until elected</span>
+        {% endif %}
+      </dd>
+    </dl>
+  </div>
+</div>
+
+{% if can_manage %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Set election amount</h2>
+    <form hx-post="/api/premiums/elect-amount" hx-target="#content" hx-swap="innerHTML" hx-on::after-request="if (requestEvent.xhr.status === 200) { location.reload(); }" class="row g-2 align-items-end">
+      <div class="col-sm-4">
+        <label class="form-label mb-1 small">Election amount (units)</label>
+        <input type="number" class="form-control" name="amount" {% if election is not none %}value="{{ election.election_amount }}"{% endif %} min="0" required>
+      </div>
+      <div class="col-sm-8">
+        <button type="submit" class="btn btn-primary w-100 mt-3">Save amount</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endif %}

@@ -25,6 +25,9 @@ class Benefit(Base):
     # e.g. "term" / "disability" / "dependent"
     benefit_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
     coverage_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    # Per-unit catalog rate used to price a member's election.
+    # Stage 5.
+    premium_rate: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: dt.datetime.now(dt.timezone.utc)

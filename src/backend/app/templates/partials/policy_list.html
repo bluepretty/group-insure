@@ -39,7 +39,16 @@
       <strong>{{ policy.policy_number }}</strong>
       <span class="text-muted small"> · product #{{ policy.product_id }}</span>
     </span>
-    <span class="badge bg-secondary rounded-pill">{{ policy.status }}</span>
+    <span>
+      <a
+        href="#"
+        class="btn btn-sm btn-outline-primary me-2"
+        hx-get="/api/premiums/policy-html?policy_id={{ policy.id }}"
+        hx-target="#content"
+        hx-swap="innerHTML"
+      >Premiums</a>
+      <span class="badge bg-secondary rounded-pill">{{ policy.status }}</span>
+    </span>
   </li>
   {% else %}
   <li class="list-group-item text-muted">No policies yet.</li>

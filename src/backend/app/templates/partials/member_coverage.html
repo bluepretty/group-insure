@@ -11,7 +11,12 @@
     </span>
     <span class="d-flex align-items-center gap-2">
       <span class="badge bg-primary rounded-pill">{{ election.benefit.code }}</span>
-      {% if election.election_amount is not none %}<span class="badge bg-secondary rounded-pill">${{ election.election_amount }}</span>{% endif %}
+      {% if election.election_amount is not none %}
+      <span class="badge bg-secondary rounded-pill">{{ election.election_amount }} units</span>
+      {% endif %}
+      {% if election.premium is not none %}
+      <span class="badge bg-success rounded-pill">${{ "%.2f"|format(election.premium) }}</span>
+      {% endif %}
     </span>
   </li>
   {% else %}

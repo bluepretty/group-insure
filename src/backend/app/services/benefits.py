@@ -5,6 +5,7 @@ Benefit code uniqueness (per product) and the one-election-per-member rule are
 enforced in the service layer (DB-level unique indexes are added on Postgres).
 """
 import datetime as dt
+from decimal import Decimal
 
 from sqlalchemy import select
 
@@ -13,6 +14,7 @@ from app.models.member import Member
 from app.models.member_benefit import MemberBenefit
 from app.models.product import Product
 from app.services.audit import record_log
+from app.services.premiums import per_member_premium
 
 
 def list_benefits(db, *, product_id: int | None = None) -> list[Benefit]:
@@ -36,6 +38,7 @@ def add_benefit(
     description: str | None = None,
     benefit_type: str | None = None,
     coverage_amount: float | None = None,
+    premium_rate: float | None = None,
 ) -> Benefit:
     product = db.get(Product, product_id)
     if product is None:
@@ -55,6 +58,7 @@ def add_benefit(
         description=description or None,
         benefit_type=benefit_type or None,
         coverage_amount=coverage_amount,
+        premium_rate=premium_rate,
     )
     db.add(benefit)
     db.commit()
@@ -64,6 +68,26 @@ def add_benefit(
         entity="Benefit",
         entity_id=benefit.id,
         details=f"product_id={product_id} code={code}",
+    )
+    return benefit
+
+
+def set_benefit_rate(
+    db, *, benefit_id: int, premium_rate: float
+) -> Benefit:
+    benefit = db.get(Benefit, benefit_id)
+    if benefit is None:
+        raise ValueError(f"Unknown benefit_id: {benefit_id}")
+    if premium_rate is None or premium_rate < 0:
+        raise ValueError("premium_rate must be a non-negative number")
+    benefit.premium_rate = Decimal(str(premium_rate))
+    db.commit()
+    record_log(
+        db,
+        action="benefit_rate_change",
+        entity="Benefit",
+        entity_id=benefit.id,
+        details=f"premium_rate={benefit.premium_rate}",
     )
     return benefit
 
@@ -115,6 +139,7 @@ def elect_benefit(
     )
     db.add(member_benefit)
     db.commit()
+    member_benefit.premium = per_member_premium(db, member_id=member_id)
     record_log(
         db,
         action="benefit_elect",

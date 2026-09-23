@@ -1,0 +1,19 @@
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Premium Detail</h2>
+</div>
+
+<p class="text-muted">Select an enrolled member to view and adjust their premium.</p>
+
+<form hx-get="/api/premiums/detail" hx-target="#content" hx-swap="innerHTML" class="row g-2 align-items-end">
+  <div class="col-sm-8">
+    <label class="form-label mb-1 small">Member</label>
+    <select class="form-select" name="member_id" required>
+      <option value="">Choose a member…</option>
+      {% for m in members %}
+      <option value="{{ m.id }}">{{ m.first_name }} {{ m.last_name }} — {{ m.member_number }}</option>
+      {% else %}
+      <option value disabled>No enrolled members</option>
+      {% endfor %}
+    </select>
+  </div>
+</form>

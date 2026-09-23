@@ -176,7 +176,8 @@ def test_smoke():
 
     # --- Stage 4: benefits + member elections ---
 
-    # Add a benefit to the product (underwriter / manage_benefits)
+    # Add a benefit to the product (underwriter / manage_benefits). Include a
+    # catalog per-unit premium rate of 0.10.
     r = client.post(
         "/api/benefits/add",
         data={
@@ -185,6 +186,7 @@ def test_smoke():
             "name": "Term Base",
             "benefit_type": "term",
             "coverage_amount": "100000",
+            "premium_rate": "0.10",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -238,10 +240,107 @@ def test_smoke():
     # Election must be one-per-member: electing again raises 400
     r = client.post(
         f"/api/benefits/{members[0]['id']}/elect",
-        data={"benefit_id": str(benefit_id)},
+        data={"benefit_id": str(benefit_id), "election_amount": "100"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 400, r.text
+
+    # --- Stage 5: premium pricing + allocation ---
+
+    # Set a per-unit premium rate on the benefit (0.10).
+    r = client.post(
+        "/api/premiums/rate",
+        data={"benefit_id": str(benefit_id), "premium_rate": "0.10"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["premium_rate"] == 0.10
+
+    # A broker cannot set a premium rate.
+    r = client.post(
+        "/api/premiums/rate",
+        data={"benefit_id": str(benefit_id), "premium_rate": "0.20"},
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
+    # The member is already elected (Stage 4). Set the election amount to 100
+    # units; premium = election_amount (100) × premium_rate (0.10) = 10.00.
+    r = client.post(
+        "/api/premiums/elect-amount",
+        data={"member_id": str(members[0]["id"]), "amount": "100"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["premium"] == 10.00, r.text
+
+    # Per-member premium endpoint.
+    r = client.get(
+        f"/api/premiums/member?member_id={members[0]['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["premium"] == 10.00, r.text
+
+    # Per-policy premium total (single member => 10.00).
+    r = client.get(
+        f"/api/premiums/policy?policy_id={policy_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total"] == 10.00, body
+    assert len(body["breakdown"]) == 1, body
+
+    # A broker can view premiums (view_premiums) but cannot manage them.
+    r = client.get(
+        f"/api/premiums/policy?policy_id={policy_id}",
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["total"] == 10.00, r.text
+
+    # The per-policy premium summary partial renders from a policy list action.
+    r = client.get(
+        f"/api/premiums/policy-html?policy_id={policy_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert "10.00" in r.text, r.text
+    assert "TERM-BASE" in r.text, r.text
+
+    # A broker cannot set an election amount.
+    r = client.post(
+        "/api/premiums/elect-amount",
+        data={"member_id": str(members[0]["id"]), "amount": "150"},
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
+    # Per-member premium HTML detail renders for the elected member.
+    r = client.get(
+        f"/api/premiums/detail?member_id={members[0]['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert "10.00" in r.text, r.text
+
+    # Coverage picker (no member_id) lists enrolled members.
+    r = client.get(
+        "/api/premiums/detail",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert "Alex" in r.text, r.text
+
+    # A broker can view the premium detail (view_premiums) but cannot
+    # set a rate or an election amount.
+    r = client.get(
+        f"/api/premiums/detail?member_id={members[0]['id']}",
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert "10.00" in r.text, r.text
 
     print("\nALL SMOKE TESTS PASSED ✓")
 

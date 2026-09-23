@@ -98,6 +98,7 @@ def benefit_add(
     description: str = Form(""),
     benefit_type: str = Form(""),
     coverage_amount: float | None = Form(None),
+    premium_rate: float | None = Form(None),
     db: Session = Depends(get_db),
     _: None = Depends(require_role("manage_benefits")),
 ) -> HTMLResponse:
@@ -110,6 +111,7 @@ def benefit_add(
             description=description or None,
             benefit_type=benefit_type or None,
             coverage_amount=coverage_amount,
+            premium_rate=premium_rate,
         )
     except ValueError as exc:
         # Surface a friendly message back into the partial rather than a 500.
@@ -134,11 +136,14 @@ def benefit_elect(
     request: Request,
     member_id: int,
     benefit_id: int = Form(...),
+    election_amount: float | None = Form(None),
     db: Session = Depends(get_db),
     _: None = Depends(require_role("manage_members")),
 ) -> JSONResponse:
     try:
-        member_benefit = elect_benefit(db, member_id=member_id, benefit_id=benefit_id)
+        member_benefit = elect_benefit(
+            db, member_id=member_id, benefit_id=benefit_id, election_amount=election_amount
+        )
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
     return JSONResponse(
@@ -146,5 +151,6 @@ def benefit_elect(
             "member_id": member_id,
             "benefit_id": benefit_id,
             "election_amount": member_benefit.election_amount,
+            "premium": float(member_benefit.premium),
         }
     )
