@@ -1,0 +1,37 @@
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Policyholders &amp; Brokers</h2>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form hx-post="/api/parties/create" hx-target="#content" hx-swap="innerHTML">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-5">
+          <label class="form-label mb-1 small">Name</label>
+          <input type="text" class="form-control" name="name" required>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label mb-1 small">Type</label>
+          <select class="form-select" name="party_type" required>
+            <option value="policyholder">Policyholder</option>
+            <option value="broker">Broker</option>
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <button type="submit" class="btn btn-primary w-100">Add</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<ul class="list-group">
+  {% for party in parties %}
+  <li class="list-group-item d-flex justify-content-between">
+    <span>{{ party.name }}</span>
+    <span class="badge bg-primary rounded-pill">{{ party.party_type }}</span>
+  </li>
+  {% else %}
+  <li class="list-group-item text-muted">No parties yet.</li>
+  {% endfor %}
+</ul>

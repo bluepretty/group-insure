@@ -1,0 +1,14 @@
+<h2 class="mb-3">Recent Activity</h2>
+<ul class="list-group">
+  {% for entry in entries %}
+  <li class="list-group-item d-flex justify-content-between">
+    <span>
+      <strong>{{ entry.action }}</strong>
+      {% if entry.entity %} on {{ entry.entity }} #{{ entry.entity_id }}{% endif %}
+    </span>
+    <small class="text-muted">{{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+  </li>
+  {% else %}
+  <li class="list-group-item text-muted">No activity recorded yet.</li>
+  {% endfor %}
+</ul>

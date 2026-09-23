@@ -8,11 +8,12 @@
     <div class="col-md-3 col-lg-2 d-md-block sidebar">
       <nav class="nav flex-column">
         <a class="nav-link active" href="/"><i class="bi bi-house"></i> Dashboard</a>
-        <a class="nav-link" href="#" hx-get="#" hx-target="#content">Policyholders</a>
+        <a class="nav-link" href="#" hx-get="/api/parties/list" hx-target="#content">Policyholders</a>
         <a class="nav-link" href="#" hx-get="#" hx-target="#content">Policies</a>
         <a class="nav-link" href="#" hx-get="#" hx-target="#content">Enrollment</a>
         <a class="nav-link" href="#" hx-get="#" hx-target="#content">Claims</a>
         <a class="nav-link" href="#" hx-get="#" hx-target="#content">Reports</a>
+        <a class="nav-link" href="#" hx-get="/api/audit/recent" hx-target="#content">Audit log</a>
         <a class="nav-link mt-3" href="/logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
       </nav>
     </div>
