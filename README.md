@@ -1,64 +1,108 @@
 # Group Insurance Admin Platform
 
 Back-office system for insurers/underwriters and broker/admin staff to administer
-group insurance policies: products, policy lifecycle, member enrollment, billing,
+group insurance policies: parties, policy lifecycle, member enrollment, billing,
 and claims.
+
+## Tech stack
+
+- **Backend:** FastAPI + SQLAlchemy 2.0 + Pydantic v2 (Python)
+- **Auth:** JWT (PyJWT) + native bcrypt, role-based access
+- **Frontend:** HTMX + Jinja2 + Bootstrap (server-rendered, no SPA framework)
+- **Database:** SQLite by default, PostgreSQL in production
 
 ## Stages
 
 Development is broken into stages (see the plan file for the roadmap):
 
-1. **Foundations & repo** — current
-2. People, access & core administration
-3. Products & policy administration
-4. Member enrollment (MVP core)
-5. Pricing & billing
-6. Claims management
-7. Reporting & dashboards
-8. Polish & hardening
+1. **Foundations & repo** — done
+2. **People, access & core administration** — in progress (models, RBAC, audit log, HTMX UI)
 
-## Stack
+## Project layout
 
-- **Backend:** Spring Boot 3 (Java)
-- **Database:** PostgreSQL 16
-- **Frontend:** React + TypeScript
+```
+src/backend/
+├── app/
+│   ├── main.py            # FastAPI app factory
+│   ├── api/               # API + page routes (auth, parties, audit, pages)
+│   ├── models/            # SQLAlchemy models (User, Party, Organization, AuditLog)
+│   ├── services/          # Business logic (parties, audit)
+│   ├── core/              # config, database, security
+│   ├── templates/         # Jinja2 templates + HTMX partials
+│   └── view.py            # Template registry (avoids name clash with /templates)
+└── static/                # static assets (CSS)
+```
 
 ## Getting started
 
-### 1. Start the database
+The project uses [uv](https://docs.astral.sh/uv/).
+
+### 1. Install dependencies
+
+```bash
+uv sync
+```
+
+### 2. Configure the database
+
+The backend reads a `.env` file in `src/backend/`. A default `.env` pointing at a
+local SQLite database is already committed, so you can start immediately:
+
+```bash
+cd src/backend
+# .env already points to sqlite:///./group_insure.db
+```
+
+For production with PostgreSQL, copy the example and edit it:
+
+```bash
+cp src/backend/.env.example src/backend/.env
+```
+
+Then set:
+
+```
+GROUP_INSURE_DATABASE_URL=postgresql+psycopg2://group_insure:group_insure@localhost:5432/group_insure
+GROUP_INSURE_JWT_SECRET=<your-production-secret>
+```
+
+You can run Postgres locally with Docker (see `docker-compose.yml`):
 
 ```bash
 docker compose up -d postgres
 ```
 
-### 2. Configure the backend
-
-The backend defaults to the `local` profile and connects to the Docker Postgres
-above. To change the datasource, edit
-`backend/src/main/resources/application-local.yml`.
-
 ### 3. Run the backend
 
 ```bash
-cd backend
-./gradlew bootRun
+cd src/backend
+GROUP_INSURE_DATABASE_URL="sqlite:///./group_insure.db" uv run uvicorn app.main:app --reload
 ```
 
-The API is available at <http://localhost:8080>.
+The app starts at <http://localhost:8000>. API docs are at `/docs`.
 
-### 4. Run the frontend (coming next)
+### 4. Register an account
+
+Use the HTML register page, or the API:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+curl -X POST http://localhost:8000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"broker1","password":"pass123","email":"b@e.com","roles":"broker"}'
 ```
 
-## Local services
+## Verifying
 
-- PostgreSQL — <http://localhost:5432> (credentials in `docker-compose.yml`)
+A smoke test covers register, login, and the `/me` round-trip. It needs the dev
+dependencies, so run them with the `dev` extra:
 
-## Tooling
+```bash
+cd src/backend
+uv run --extra dev pytest app/api/test_smoke.py
+```
 
-- **Build:** Gradle (backend), npm (frontend)
-- **CI:** GitHub Actions (`.github/workflows/ci.yml`)
+## Database notes
+
+- SQLite is the default (no setup required) — great for local development.
+- Switching to PostgreSQL requires no code changes; only the `DATABASE_URL` env var.
+- Models use portable SQLAlchemy types, so they work on both databases.
