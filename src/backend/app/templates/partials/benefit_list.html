@@ -1,0 +1,62 @@
+{% if error %}
+<div class="alert alert-danger" role="alert">{{ error }}</div>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Benefits</h2>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form hx-post="/api/benefits/add" hx-target="#content" hx-swap="innerHTML">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">Product</label>
+          <select class="form-select" name="product_id" required>
+            {% for product in products %}
+            <option value="{{ product.id }}">{{ product.name }}</option>
+            {% else %}
+            <option value disabled>No products — add one first</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">Code</label>
+          <input type="text" class="form-control" name="code" placeholder="e.g. TERM-BASE" required>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label mb-1 small">Name</label>
+          <input type="text" class="form-control" name="name" required>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">Type</label>
+          <input type="text" class="form-control" name="benefit_type" placeholder="term/disability/dependent">
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">Coverage $</label>
+          <input type="text" class="form-control" name="coverage_amount">
+        </div>
+        <div class="col-sm-1">
+          <button type="submit" class="btn btn-primary w-100 mt-3">Add</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<ul class="list-group">
+  {% for benefit in benefits %}
+  <li class="list-group-item d-flex justify-content-between align-items-center">
+    <span>
+      <strong>{{ benefit.code }}</strong>
+      <span class="text-muted small"> — {{ benefit.name }} (product #{{ benefit.product_id }})</span>
+    </span>
+    <span class="d-flex align-items-center gap-2">
+      {% if benefit.benefit_type %}<span class="badge bg-light text-dark">{{ benefit.benefit_type }}</span>{% endif %}
+      {% if benefit.coverage_amount is not none %}<span class="badge bg-secondary rounded-pill">${{ benefit.coverage_amount }}</span>{% endif %}
+    </span>
+  </li>
+  {% else %}
+  <li class="list-group-item text-muted">No benefits added yet.</li>
+  {% endfor %}
+</ul>

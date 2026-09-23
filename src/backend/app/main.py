@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.api import auth, audit, members, pages, parties, policies, products
+from app.api import auth, audit, benefits, members, pages, parties, policies, products
 from app.core.database import engine, Base
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -28,6 +28,7 @@ app.include_router(auth.router, prefix="/api/auth")
 app.include_router(parties.router)
 app.include_router(products.router)
 app.include_router(policies.router)
+app.include_router(benefits.router)
 app.include_router(members.router)
 app.include_router(audit.router)
 app.include_router(pages.router)

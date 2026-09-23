@@ -174,6 +174,75 @@ def test_smoke():
     )
     assert r.status_code == 403, r.text
 
+    # --- Stage 4: benefits + member elections ---
+
+    # Add a benefit to the product (underwriter / manage_benefits)
+    r = client.post(
+        "/api/benefits/add",
+        data={
+            "product_id": str(product_id),
+            "code": "TERM-BASE",
+            "name": "Term Base",
+            "benefit_type": "term",
+            "coverage_amount": "100000",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+
+    # List benefits as underwriter (view_benefits allowed, must succeed)
+    r = client.get("/api/benefits?product_id=" + str(product_id), headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200, r.text
+    benefits = r.json()
+    assert benefits, "benefits list should not be empty"
+    benefit_id = benefits[0]["id"]
+
+    # List member coverage as underwriter (view_benefits allowed, must succeed)
+    r = client.get("/api/benefits/coverage", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200, r.text
+
+    # A broker cannot add a benefit
+    r = client.post(
+        "/api/benefits/add",
+        data={
+            "product_id": str(product_id),
+            "code": "BAD",
+            "name": "Bad",
+        },
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
+    # A broker cannot elect a benefit
+    r = client.post(
+        f"/api/benefits/{members[0]['id']}/elect",
+        data={"benefit_id": str(benefit_id)},
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
+    # Elect a member into the benefit (underwriter / manage_members)
+    r = client.post(
+        f"/api/benefits/{members[0]['id']}/elect",
+        data={"benefit_id": str(benefit_id)},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["member_id"] == members[0]["id"], r.text
+
+    # Listing coverage should now include the election
+    r = client.get("/api/benefits/coverage", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200, r.text
+    assert r.json(), "coverage should not be empty after election"
+
+    # Election must be one-per-member: electing again raises 400
+    r = client.post(
+        f"/api/benefits/{members[0]['id']}/elect",
+        data={"benefit_id": str(benefit_id)},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
     print("\nALL SMOKE TESTS PASSED ✓")
 
 

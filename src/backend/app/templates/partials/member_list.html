@@ -55,6 +55,17 @@
       <span class="badge bg-secondary rounded-pill">{{ member.status }}</span>
       {% if member.relationship %}<span class="badge bg-light text-dark">{{ member.relationship }}</span>{% endif %}
       {% if member.status == 'active' %}
+      <form hx-post="/api/benefits/{{ member.id }}/elect" hx-target="#content" hx-swap="innerHTML" hx-on::after-request="if (requestEvent.xhr.status === 200) { location.reload(); }" class="d-inline-flex align-items-center gap-2">
+        <select class="form-select form-select-sm" style="width:auto" name="benefit_id" required>
+          <option value="">Benefit…</option>
+          {% for benefit in benefits %}
+          <option value="{{ benefit.id }}">{{ benefit.code }}</option>
+          {% else %}
+          <option value disabled>Add a benefit first</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm btn-outline-primary">Elect</button>
+      </form>
       <button class="btn btn-sm btn-outline-danger" hx-post="/api/members/{{ member.id }}/terminate" hx-swap="none" hx-on::after-request="if (requestEvent.xhr.status === 200) { location.reload(); }">
         Terminate
       </button>

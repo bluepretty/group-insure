@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import require_role
 from app.core.database import get_db
+from app.services.benefits import list_benefits
 from app.services.members import (
     enroll_member,
     list_members,
@@ -47,7 +48,7 @@ def member_list(
     return templates.TemplateResponse(
         request,
         "partials/member_list.html",
-        {"members": members, "policies": list_policies(db)},
+        {"members": members, "policies": list_policies(db), "benefits": list_benefits(db)},
     )
 
 

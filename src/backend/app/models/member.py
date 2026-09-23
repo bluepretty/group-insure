@@ -7,7 +7,7 @@ later.
 import datetime as dt
 
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship as relationship_relationship
 
 from app.core.database import Base
 
@@ -33,3 +33,5 @@ class Member(Base):
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: dt.datetime.now(dt.timezone.utc)
     )
+    member_benefit: Mapped["MemberBenefit | None"] = relationship_relationship("MemberBenefit")
+    policy: Mapped["Policy"] = relationship_relationship("Policy")
