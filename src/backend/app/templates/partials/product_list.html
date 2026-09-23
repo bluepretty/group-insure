@@ -1,0 +1,38 @@
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Product catalog</h2>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form hx-post="/api/products/create" hx-target="#content" hx-swap="innerHTML">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-4">
+          <label class="form-label mb-1 small">Name</label>
+          <input type="text" class="form-control" name="name" required>
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label mb-1 small">Type</label>
+          <input type="text" class="form-control" name="product_type" placeholder="e.g. group-term-life" required>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label mb-1 small">Description</label>
+          <input type="text" class="form-control" name="description">
+        </div>
+        <div class="col-sm-1">
+          <button type="submit" class="btn btn-primary w-100">Add</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<ul class="list-group">
+  {% for product in products %}
+  <li class="list-group-item d-flex justify-content-between">
+    <span>{{ product.name }} <span class="text-muted small">— {{ product.product_type }}</span></span>
+    <span class="badge bg-info rounded-pill">{{ product.product_type }}</span>
+  </li>
+  {% else %}
+  <li class="list-group-item text-muted">No products yet.</li>
+  {% endfor %}
+</ul>

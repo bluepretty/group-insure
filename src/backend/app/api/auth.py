@@ -60,8 +60,16 @@ def require_user(user: User = Depends(get_current_user)) -> User:
 # Role -> permissions map. Adding a permission or a new role here is all that's
 # required; call sites only reference permissions via require_role().
 _ROLE_PERMISSIONS: dict[str, set[str]] = {
-    "underwriter": {"view_dashboard", "manage_parties", "manage_policies", "manage_claims"},
-    "broker": {"view_dashboard", "manage_parties"},
+    "underwriter": {
+        "view_dashboard",
+        "manage_parties",
+        "view_products",
+        "manage_products",
+        "view_policies",
+        "manage_policies",
+        "manage_claims",
+    },
+    "broker": {"view_dashboard", "manage_parties", "view_policies", "view_products"},
 }
 
 

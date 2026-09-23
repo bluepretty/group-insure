@@ -1,0 +1,47 @@
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Policies</h2>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form hx-post="/api/policies/create" hx-target="#content" hx-swap="innerHTML">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-3">
+          <label class="form-label mb-1 small">Policy number</label>
+          <input type="text" class="form-control" name="policy_number" required>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label mb-1 small">Product</label>
+          <select class="form-select" name="product_id" required>
+            {% for product in products %}
+            <option value="{{ product.id }}">{{ product.name }}</option>
+            {% else %}
+            <option value disabled>No products — add one first</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label mb-1 small">Policyholder</label>
+          <input type="number" class="form-control" name="party_id" placeholder="party id">
+        </div>
+        <div class="col-sm-3">
+          <button type="submit" class="btn btn-primary w-100">Add policy</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<ul class="list-group">
+  {% for policy in policies %}
+  <li class="list-group-item d-flex justify-content-between align-items-center">
+    <span>
+      <strong>{{ policy.policy_number }}</strong>
+      <span class="text-muted small"> · product #{{ policy.product_id }}</span>
+    </span>
+    <span class="badge bg-secondary rounded-pill">{{ policy.status }}</span>
+  </li>
+  {% else %}
+  <li class="list-group-item text-muted">No policies yet.</li>
+  {% endfor %}
+</ul>
