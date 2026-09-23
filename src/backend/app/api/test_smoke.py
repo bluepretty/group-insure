@@ -105,6 +105,65 @@ def test_smoke():
     )
     assert r.status_code == 400, r.text
 
+    # Enroll a member on the policy
+    r = client.post(
+        "/api/members/create",
+        data={
+            "policy_id": str(policy_id),
+            "party_id": str(party_id),
+            "member_number": "MEM-001",
+            "first_name": "Alex",
+            "last_name": "Doe",
+            "relationship": "self",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+
+    # List members as underwriter (should be viewable, and we can see it)
+    r = client.get("/api/members?party_id=" + str(party_id), headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200, r.text
+    members = r.json()
+    assert members, "members list should not be empty"
+
+    # List members as broker (view_members allowed, must succeed)
+    r = client.post("/api/auth/login", json={"username": "testbroker", "password": "secret123"})
+    assert r.status_code == 200, r.text
+    broker_token = r.json()["access_token"]
+    r = client.get(
+        "/api/members?party_id=" + str(party_id),
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 200, r.text
+
+    # A broker cannot enroll a member
+    r = client.post(
+        "/api/members/create",
+        data={
+            "policy_id": str(policy_id),
+            "member_number": "MEM-BAD",
+            "first_name": "Bad",
+            "last_name": "Actor",
+        },
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
+    # Terminate the member; confirm the API reflects the change
+    r = client.post(
+        f"/api/members/{members[0]['id']}/terminate",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "terminated", r.text
+
+    # A broker cannot terminate a member either
+    r = client.post(
+        f"/api/members/{members[0]['id']}/terminate",
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
     # A broker cannot create a product
     r = client.post("/api/auth/login", json={"username": "testbroker", "password": "secret123"})
     broker_token = r.json()["access_token"]

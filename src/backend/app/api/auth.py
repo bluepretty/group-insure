@@ -35,12 +35,16 @@ class RegisterModel(BaseModel):
 
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User | None:
-    # Prefer the session cookie set on login; also accept a Bearer token from
-    # the Authorization header for API clients.
-    token = request.cookies.get("access_token")
+    # An explicit Authorization header takes precedence; otherwise fall back to
+    # the session cookie set on login. A bare cookie otherwise shadows an
+    # incoming Bearer header and would attribute the call to whoever last
+    # logged in, so the header wins.
     authorization = request.headers.get("Authorization", "")
-    if not token and authorization.startswith("Bearer "):
+    token = None
+    if authorization.startswith("Bearer "):
         token = authorization[7:].strip()
+    if not token:
+        token = request.cookies.get("access_token")
     if not token:
         return None
     try:
@@ -68,13 +72,22 @@ _ROLE_PERMISSIONS: dict[str, set[str]] = {
         "view_policies",
         "manage_policies",
         "manage_claims",
+        "view_members",
+        "manage_members",
     },
-    "broker": {"view_dashboard", "manage_parties", "view_policies", "view_products"},
+    "broker": {
+        "view_dashboard",
+        "manage_parties",
+        "view_policies",
+        "view_products",
+        "view_members",
+    },
 }
 
 
 def _has_permission(user: User, permission: str) -> bool:
-    return permission in _ROLE_PERMISSIONS.get(user.roles, set())
+    roles = {r.strip() for r in user.roles.split(";") if r.strip()}
+    return any(permission in _ROLE_PERMISSIONS.get(role, set()) for role in roles)
 
 
 def require_role(permission: str):

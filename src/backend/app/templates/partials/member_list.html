@@ -1,0 +1,67 @@
+{% if error %}
+<div class="alert alert-danger" role="alert">{{ error }}</div>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Enrolled Members</h2>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form hx-post="/api/members/create" hx-target="#content" hx-swap="innerHTML">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">Policy</label>
+          <select class="form-select" name="policy_id" required>
+            {% for policy in policies %}
+            <option value="{{ policy.id }}">{{ policy.policy_number }} · product #{{ policy.product_id }}</option>
+            {% else %}
+            <option value disabled>No policies — add one first</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">First name</label>
+          <input type="text" class="form-control" name="first_name" required>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">Last name</label>
+          <input type="text" class="form-control" name="last_name" required>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">Member number</label>
+          <input type="text" class="form-control" name="member_number" required>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">Relationship</label>
+          <input type="text" class="form-control" name="relationship" placeholder="self/spouse/dependent">
+        </div>
+        <div class="col-sm-2">
+          <button type="submit" class="btn btn-primary w-100 mt-3">Enroll</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<ul class="list-group">
+  {% for member in members %}
+  <li class="list-group-item d-flex justify-content-between align-items-center">
+    <span>
+      <strong>{{ member.first_name }} {{ member.last_name }}</strong>
+      <span class="text-muted small"> — #{{ member.member_number }} (policy #{{ member.policy_id }})</span>
+    </span>
+    <span class="d-flex align-items-center gap-2">
+      <span class="badge bg-secondary rounded-pill">{{ member.status }}</span>
+      {% if member.relationship %}<span class="badge bg-light text-dark">{{ member.relationship }}</span>{% endif %}
+      {% if member.status == 'active' %}
+      <button class="btn btn-sm btn-outline-danger" hx-post="/api/members/{{ member.id }}/terminate" hx-swap="none" hx-on::after-request="if (requestEvent.xhr.status === 200) { location.reload(); }">
+        Terminate
+      </button>
+      {% endif %}
+    </span>
+  </li>
+  {% else %}
+  <li class="list-group-item text-muted">No members enrolled yet.</li>
+  {% endfor %}
+</ul>
