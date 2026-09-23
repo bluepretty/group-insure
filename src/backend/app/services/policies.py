@@ -13,11 +13,12 @@ from app.services.audit import record_log
 
 VALID_STATUSES = ("draft", "active", "lapsed", "closed")
 
-# Allowed status transitions. A policy can always move forward from "draft" and
-# be reinstated once from "lapsed".
+# Allowed status transitions. A policy can move forward from "draft" to
+# "active"; a non-paying policy lapses and can be reinstated or closed; once
+# "closed" a policy is terminal. "active" -> "draft" is not allowed.
 _ALLOWED: dict[str, set[str]] = {
-    "draft": {"active", "closed"},
-    "active": {"lapsed", "closed"},
+    "draft": {"active"},
+    "active": {"lapsed"},
     "lapsed": {"active", "closed"},
     "closed": set(),
 }
