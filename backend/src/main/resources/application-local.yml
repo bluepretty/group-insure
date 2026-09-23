@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/group_insure
+    username: group_insure
+    password: group_insure
+  jpa:
+    h2ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true

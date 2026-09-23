@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: group-insure-db
+    environment:
+      POSTGRES_DB: group_insure
+      POSTGRES_USER: group_insure
+      POSTGRES_PASSWORD: group_insure
+    ports:
+      - "5432:5432"
+    volumes:
+      - group-insure-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U group_insure -d group_insure"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  group-insure-pgdata:

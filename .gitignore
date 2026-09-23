@@ -1,0 +1,30 @@
+# Java / Maven
+target/
+*.class
+*.jar
+!lib/*.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+bin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / env
+*.log
+.env
+.env.*
+!env.example
+
+# Local tooling
+*.swp
+.screenshot/
