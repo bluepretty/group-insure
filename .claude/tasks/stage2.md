@@ -12,4 +12,4 @@
 - [x] Create templates (partials, dashboard nav)
 - [x] Update tests in test_smoke.py
 - [x] Run smoke test & fix issues
-- [ ] Commit
+- [x] Commit
