@@ -7,6 +7,8 @@ from app.models.user import User
 
 
 def setup_test_db():
+    # Start from a clean slate so the fixed test user can be registered on every run.
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
 
