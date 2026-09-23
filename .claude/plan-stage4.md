@@ -1,17 +1,17 @@
 # Stage 4 — Product Benefits + Member Coverage Elections
 
-- [ ] Create Benefit model (benefits table)
-- [ ] Create MemberBenefit model (member_benefits table)
-- [ ] Register both in app/models/__init__.py
-- [ ] Extend RBAC (view_benefits, manage_benefits)
-- [ ] Create service (benefits.py): list per product, add benefit, list a member's elections
-- [ ] Create API (benefits.py): per-product benefit list partial, add-benefit form, member-coverage list
-- [ ] Wire router into main.py
-- [ ] Create templates (partials/benefit_list.html, partials/member_coverage.html)
-- [ ] Link product detail → benefits, member detail → coverage
-- [ ] Extend smoke test (add benefit, enroll member with benefit, list coverage, broker 403)
-- [ ] Run smoke test & fix issues
-- [ ] Commit
+- [x] Create Benefit model (benefits table)
+- [x] Create MemberBenefit model (member_benefits table)
+- [x] Register both in app/models/__init__.py
+- [x] Extend RBAC (view_benefits, manage_benefits)
+- [x] Create service (benefits.py): list per product, add benefit, list a member's elections
+- [x] Create API (benefits.py): per-product benefit list partial, add-benefit form, member-coverage list
+- [x] Wire router into main.py
+- [x] Create templates (partials/benefit_list.html, partials/member_coverage.html)
+- [x] Link product detail → benefits, member detail → coverage
+- [x] Extend smoke test (add benefit, enroll member with benefit, list coverage, broker 403)
+- [x] Run smoke test & fix issues
+- [x] Commit
 
 ## Context
 
