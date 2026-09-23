@@ -1,0 +1,46 @@
+:root {
+  --sidebar-bg: #1b2735;
+  --sidebar-fg: #cdd3d8;
+  --sidebar-active: #4c8dff;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: var(--sidebar-bg);
+  border-radius: 0.75rem;
+  padding: 1rem 0.5rem;
+  min-height: calc(100vh - 2rem);
+}
+
+.sidebar .nav-link {
+  color: var(--sidebar-fg);
+  border-radius: 0.5rem;
+  margin-bottom: 0.25rem;
+  padding: 0.6rem 0.85rem;
+}
+
+.sidebar .nav-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.sidebar .nav-link.active {
+  background: var(--sidebar-active);
+  color: #fff;
+}
+
+.sidebar .nav-link i {
+  margin-right: 0.4rem;
+}
+
+.card {
+  border: none;
+  border-radius: 0.75rem;
+}
+
+.card-title {
+  font-weight: 600;
+}

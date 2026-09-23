@@ -28,3 +28,14 @@ Thumbs.db
 # Local tooling
 *.swp
 .screenshot/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3

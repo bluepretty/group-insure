@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Register — Group Insurance{% endblock %}
+
+{% block body %}
+<div class="container">
+  <div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+      <div class="card shadow-sm">
+        <div class="card-body p-4">
+          <h3 class="card-title text-center mb-4">Create account</h3>
+
+          {% if error %}
+          <div class="alert alert-danger" role="alert">{{ error }}</div>
+          {% endif %}
+
+          <form action="/api/auth/register" method="post" hx-post="/api/auth/register"
+                hx-target="#errors" hx-swap="innerHTML">
+            <div class="mb-3">
+              <label class="form-label">Username</label>
+              <input type="text" class="form-control" name="username" required autofocus>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-control" name="email" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Role</label>
+              <select class="form-select" name="roles">
+                <option value="broker">Broker / admin staff</option>
+                <option value="underwriter">Underwriter</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Password</label>
+              <input type="password" class="form-control" name="password" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Register</button>
+          </form>
+
+          <div id="errors" class="mt-3"></div>
+          <div class="text-center mt-3">
+            <a href="/login">Already have an account? Sign in</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
