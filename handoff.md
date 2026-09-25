@@ -53,5 +53,5 @@ Run **from `src/backend`** (templates/static are resolved relative to there). Th
 - `set_benefit_rate` / `set_election_amount` raise `ValueError` → endpoints return 400.
 
 ## Stage 6
-- No `claude/plan-stage6.md` exists yet — nothing to spec out. Ask Peter what Stage 6
-  should cover (and where to put its plan file) before starting. Don't invent scope.
+- **Complete (2026-09-25). Committed.** Billing & payment processing: invoice + payment models, `view_billing`/`manage_billing` RBAC, invoice/payment services, `/api/billing` router, invoice partials, premium-summary → Invoices link. Smoke test covers Stage 6 (issue invoice → 10.00, full payment → paid, broker view vs 403 manage). See `claude/plan-stage6.md`.
+- Previously in progress (2026-09-25): Peter delegated scope; was being implemented.

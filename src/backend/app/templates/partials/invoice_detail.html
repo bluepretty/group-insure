@@ -1,0 +1,81 @@
+{% if invoice is none %}
+<h2 class="mb-3">Invoice</h2>
+<p class="text-muted">Invoice not found.</p>
+{% else %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">{{ invoice.invoice_number }} <span class="badge bg-secondary rounded-pill">{{ invoice.status }}</span></h2>
+  <span class="badge bg-primary h5 mb-0">Total: ${{ "%.2f"|format(invoice.total_amount) }}</span>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Policy</dt>
+      <dd class="col-sm-8">{{ invoice.policy_id }}</dd>
+
+      <dt class="col-sm-4">Issued</dt>
+      <dd class="col-sm-8">{{ invoice.issued_date if invoice.issued_date is not none else '—' }}</dd>
+
+      <dt class="col-sm-4">Due</dt>
+      <dd class="col-sm-8">{{ invoice.due_date if invoice.due_date is not none else '—' }}</dd>
+
+      <dt class="col-sm-4">Paid</dt>
+      <dd class="col-sm-8">${{ "%.2f"|format(invoice.paid_amount) }}</dd>
+
+      <dt class="col-sm-4">Balance</dt>
+      <dd class="col-sm-8">{{ "%.2f"|format((invoice.total_amount - invoice.paid_amount) if invoice.total_amount is not none else 0) }}</dd>
+    </dl>
+  </div>
+</div>
+
+{% if payments|length > 0 %}
+<h2 class="h5 mb-2">Payments</h2>
+<table class="table table-align-middle mb-3">
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Method</th>
+      <th>Reference</th>
+      <th class="text-end">Amount</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for payment in payments %}
+    <tr>
+      <td>{{ payment.payment_date.strftime('%Y-%m-%d %H:%M') if payment.payment_date is not none else '—' }}</td>
+      <td>{{ payment.method if payment.method else '—' }}</td>
+      <td>{{ payment.reference if payment.reference else '—' }}</td>
+      <td class="text-end">${{ "%.2f"|format(payment.amount) }}</td>
+      <td><span class="badge bg-secondary rounded-pill">{{ payment.status }}</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if can_manage and invoice.status != 'paid' %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Record payment</h2>
+    <form hx-post="/api/billing/payments/{{ invoice.id }}" hx-target="#content" hx-swap="innerHTML" class="row g-2 align-items-end">
+      <div class="col-sm-3">
+        <label class="form-label mb-1 small">Amount</label>
+        <input type="number" class="form-control" name="amount" step="0.01" min="0.01" required>
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label mb-1 small">Method</label>
+        <input type="text" class="form-control" name="method" placeholder="e.g. bank transfer">
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label mb-1 small">Reference</label>
+        <input type="text" class="form-control" name="reference" placeholder="ref #">
+      </div>
+      <div class="col-sm-3">
+        <button type="submit" class="btn btn-primary w-100 mt-3">Record payment</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endif %}

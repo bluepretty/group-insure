@@ -8,6 +8,8 @@ from app.models.benefit import Benefit
 from app.models.member_benefit import MemberBenefit
 from app.models.product import Product
 from app.models.user import User
+from app.models.invoice import Invoice
+from app.models.payment import Payment
 
 __all__ = [
     "AuditLog",
@@ -19,4 +21,6 @@ __all__ = [
     "Benefit",
     "Product",
     "User",
+    "Invoice",
+    "Payment",
 ]

@@ -20,7 +20,7 @@ class PartyModel(BaseModel):
     organization_id: int | None = None
 
 
-@router.get("", response_class=list[PartyModel])
+@router.get("", response_model=list[PartyModel])
 def list_parties_endpoint(
     db: Session = Depends(get_db), _=Depends(require_role("manage_parties"))
 ) -> list[PartyModel]:

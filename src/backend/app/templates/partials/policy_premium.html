@@ -1,7 +1,12 @@
 {% if summary and summary.breakdown %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="mb-0">Premium Summary — Policy {{ summary.policy_id }}</h2>
-  <span class="badge bg-primary h5 mb-0">Total: ${{ "%.2f"|format(summary.total) }}</span>
+  <div>
+    <a href="#" class="btn btn-sm btn-outline-primary me-2"
+       hx-get="/api/billing/invoices?policy_id={{ summary.policy_id }}"
+       hx-target="#content" hx-swap="innerHTML">Invoices</a>
+    <span class="badge bg-primary h5 mb-0">Total: ${{ "%.2f"|format(summary.total) }}</span>
+  </div>
 </div>
 
 <div class="table-responsive">

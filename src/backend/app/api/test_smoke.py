@@ -342,6 +342,74 @@ def test_smoke():
     assert r.status_code == 200, r.text
     assert "10.00" in r.text, r.text
 
+    # --- Stage 6: billing + payments ---
+
+    # Issue an invoice for the active policy (total = 10.00 premium).
+    r = client.post(
+        "/api/billing/invoices",
+        data={"policy_id": str(policy_id)},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    inv = r.json()
+    assert inv["status"] == "issued", inv
+    assert inv["total_amount"] == 10.00, inv
+
+    # Invoice list shows it.
+    r = client.get(
+        "/api/billing/invoices?policy_id=" + str(policy_id),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert inv["id"] in [i["id"] for i in r.json()], r.text
+
+    # A second invoice for the same (unpaid) policy is rejected.
+    r = client.post(
+        "/api/billing/invoices",
+        data={"policy_id": str(policy_id)},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
+    # Record the full payment; invoice flips to paid.
+    r = client.post(
+        f"/api/billing/invoices/{inv['id']}/payments",
+        data={"amount": "10.00", "method": "bank_transfer"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+
+    r = client.get(
+        "/api/billing/invoices",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    paid = next(i for i in r.json() if i["id"] == inv["id"])
+    assert paid["status"] == "paid", paid
+    assert paid["paid_amount"] == 10.00, paid
+
+    # A broker can view invoices (view_billing) but cannot manage them.
+    r = client.get(
+        "/api/billing/invoices",
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 200, r.text
+
+    r = client.post(
+        f"/api/billing/invoices/{inv['id']}/payments",
+        data={"amount": "1.00"},
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
+    # Invalid payment amount -> 400.
+    r = client.post(
+        f"/api/billing/invoices/{inv['id']}/payments",
+        data={"amount": "0"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
     print("\nALL SMOKE TESTS PASSED ✓")
 
 

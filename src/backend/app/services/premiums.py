@@ -90,3 +90,22 @@ def set_election_amount(db, *, member_id: int, amount: float) -> MemberBenefit:
         details=f"amount={amount} premium={election.premium}",
     )
     return election
+
+
+def refresh_policy_premium(db, policy_id: int) -> Policy:
+    """Compute and *persist* a policy's premium, the source of truth the invoice
+    service snapshots. Previously only computed in-memory, so commit the value
+    and record the change."""
+    policy = db.get(Policy, policy_id)
+    if policy is None:
+        raise ValueError(f"Unknown policy_id: {policy_id}")
+    policy_premium(db, policy_id=policy_id)
+    db.commit()
+    record_log(
+        db,
+        action="policy_premium_refresh",
+        entity="Policy",
+        entity_id=policy.id,
+        details=f"premium={policy.premium}",
+    )
+    return policy

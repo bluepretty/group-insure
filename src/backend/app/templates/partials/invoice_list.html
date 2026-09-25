@@ -1,0 +1,36 @@
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Invoices</h2>
+</div>
+
+{% if invoices is none or invoices|length == 0 %}
+<p class="text-muted">No invoices yet.</p>
+{% else %}
+<div class="table-responsive">
+  <table class="table table-align-middle mb-0">
+    <thead>
+      <tr>
+        <th>Invoice</th>
+        <th>Policy</th>
+        <th>Status</th>
+        <th>Total</th>
+        <th>Paid</th>
+        <th>Due</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for invoice in invoices %}
+      <tr>
+        <td>
+          <a href="#" class="fw-bold" hx-get="/api/billing/invoices/{{ invoice.id }}" hx-target="#content" hx-swap="innerHTML">{{ invoice.invoice_number }}</a>
+        </td>
+        <td>{{ invoice.policy_id }}</td>
+        <td><span class="badge bg-secondary rounded-pill">{{ invoice.status }}</span></td>
+        <td class="text-end">${{ "%.2f"|format(invoice.total_amount if invoice.total_amount is not none else 0) }}</td>
+        <td class="text-end">${{ "%.2f"|format(invoice.paid_amount) }}</td>
+        <td>{{ invoice.due_date if invoice.due_date is not none else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}

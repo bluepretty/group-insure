@@ -1,0 +1,25 @@
+{% if existing is not none %}
+<h2 class="mb-3">Create Invoice</h2>
+<p class="text-muted">
+  An outstanding ({{ existing.status }}) invoice already exists for this policy:
+  <strong>{{ existing.invoice_number }}</strong>.
+  Record payments against it, or void it first.
+</p>
+{% else %}
+<h2 class="mb-3">Create Invoice</h2>
+<p class="text-muted">Issue an invoice for this policy's computed premium.</p>
+<form hx-post="/api/billing/invoices" hx-target="#content" hx-swap="innerHTML" class="row g-2 align-items-end">
+  <input type="hidden" name="policy_id" value="{{ policy_id }}">
+  <div class="col-sm-3">
+    <label class="form-label mb-1 small">Issue date</label>
+    <input type="date" class="form-control" name="issued_date">
+  </div>
+  <div class="col-sm-3">
+    <label class="form-label mb-1 small">Due date</label>
+    <input type="date" class="form-control" name="due_date">
+  </div>
+  <div class="col-sm-6 d-flex align-items-end justify-content-end">
+    <button type="submit" class="btn btn-primary">Issue invoice</button>
+  </div>
+</form>
+{% endif %}
