@@ -1,5 +1,10 @@
 # Handoff — Stage 5 (Premium Pricing) complete, next = Stage 6
 
+> **UPDATE 2026-09-25: Stage 6 is now complete and committed (commit `56fb774`).**
+> See `claude/plan-stage6.md` for what was built. The content below this banner is
+> the original Stage 6 kickoff note from 2026-09-23; it is kept as-is for history.
+> The next phase to pick up is whatever Stage 7 turns out to be.
+
 Written 2026-09-23 ~11pm. Peter is asleep; come back tomorrow.
 
 ## What just happened

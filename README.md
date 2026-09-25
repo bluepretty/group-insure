@@ -13,10 +13,15 @@ and claims.
 
 ## Stages
 
-Development is broken into stages (see the plan file for the roadmap):
+Development is broken into stages. Each phase has an authoritative plan in
+`.claude/plan-stageN.md` (e.g. `.claude/plan-stage6.md` for the most recent):
 
 1. **Foundations & repo** — done
-2. **People, access & core administration** — in progress (models, RBAC, audit log, HTMX UI)
+2. **Products & policy administration** — done (product catalog, group policies with lifecycle, RBAC)
+3. **Member enrollment** — done
+4. **Product benefits + member coverage elections** — done
+5. **Premium pricing + allocation** — done
+6. **Billing & payment processing** — done (invoices, payments, `manage_billing`/`view_billing` permissions)
 
 ## Project layout
 
