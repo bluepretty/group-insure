@@ -103,3 +103,24 @@ def change_policy_status(db, policy_id: int, to_status: str) -> Policy:
         details=f"from={policy.status} to={to_status}",
     )
     return policy
+
+
+def laps_if_overdue(db, *, policy_id: int, today: dt.date | None = None) -> Policy | None:
+    """Lap an active policy with an unpaid invoice past its due date.
+
+    No-op when the policy is not active or the invoice is not overdue, in which
+    case None is returned. When the policy lapses, ``change_policy_status``
+    validates the transition and writes the ``policy_status_change`` audit
+    record, so this function only decides whether to call it.
+    """
+    from app.services.invoices import _outstanding_invoice
+
+    if today is None:
+        today = dt.date.today()
+    policy = db.get(Policy, policy_id)
+    if policy is None or policy.status != "active":
+        return None
+    invoice = _outstanding_invoice(db, policy_id=policy_id)
+    if invoice is None or invoice.due_date is None or invoice.due_date > today:
+        return None
+    return change_policy_status(db, policy_id=policy_id, to_status="lapsed")

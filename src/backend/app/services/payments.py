@@ -10,8 +10,10 @@ from sqlalchemy import select
 
 from app.models.invoice import Invoice
 from app.models.payment import Payment
+from app.models.policy import Policy
 from app.services.audit import record_log
 from app.services.invoices import _reconcile_invoice
+from app.services.policies import change_policy_status
 
 
 def list_payments(db) -> list[Payment]:
@@ -63,6 +65,13 @@ def record_payment(
     db.commit()
     _reconcile(db, invoice)
     db.commit()
+    if invoice.status == "paid" and invoice.policy_id is not None:
+        # Reinstating a lapsed policy is the natural effect of full payment.
+        # Only the lapsed → active transition is a real change; an active
+        # policy that simply pays its invoice stays active.
+        policy = db.get(Policy, invoice.policy_id)
+        if policy is not None and policy.status == "lapsed":
+            change_policy_status(db, policy_id=invoice.policy_id, to_status="active")
     record_log(
         db,
         action="payment_recorded",

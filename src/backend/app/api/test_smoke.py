@@ -618,7 +618,53 @@ def test_smoke():
     )
     assert r.status_code == 200, r.text
 
-    print("\nALL SMOKE TESTS PASSED ✓")
+    # --- Stage 9: automated policy lapse ----------------------------------
+
+    # Issue a new invoice for the (still active) policy, with a past due date.
+    r = client.post(
+        "/api/billing/invoices",
+        data={"policy_id": str(policy_id), "due_date": "2024-01-01"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    overdue = r.json()
+    assert overdue["total_amount"] == 10.00, overdue
+
+    # The underpaid invoice past its due date lapses the policy automatically.
+    r = client.get(
+        f"/api/policies/{policy_id}/lapse-check",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "lapsed", body
+
+    # The lapse-check endpoint reports the lapse.
+    assert body["lapsed"] is True, body
+
+    # Settling the outstanding invoice reinstates the policy.
+    r = client.post(
+        f"/api/billing/invoices/{overdue['id']}/payments",
+        data={"amount": "10.00"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+
+    r = client.get(
+        f"/api/policies/{policy_id}/lapse-check",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "active", body
+    assert body["lapsed"] is False, body
+
+    # A broker cannot lapse a policy.
+    r = client.get(
+        f"/api/policies/{policy_id}/lapse-check",
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
 
 
 if __name__ == "__main__":

@@ -1,12 +1,25 @@
-# Handoff — Stage 8 (Reports) complete, next = define Stage 9
+# Handoff — Stage 9 (Policy Lapse) complete
 
-> **UPDATE 2026-09-25: Stage 8 is now complete and committed (commit `ae66d8b`).**
-> Reports / aggregate dashboard: `build_report()` service, JSON + HTMX endpoints,
-> the previously-dead **Reports** nav link wired, and the four dashboard overview
-> stat cards populated with real data. Smoke test green (1 passed). See
-> `claude/plan-stage8.md`. The content below this banner is the original kickoff
-> note; kept as history. The next phase to pick up is whatever Stage 9 turns out
-> to be.
+> **UPDATE 2026-09-25 ~11:20pm: Stage 9 is IMPLEMENTED and GREEN, but NOT YET
+> committed — the commit is tomorrow's first task.** Billing → policy lifecycle:
+> an unpaid invoice past `due_date` lapses an active policy, full payment
+> reinstates it (`lapsed → active`), and reissuing while lapsed re-activates.
+> New `GET /api/policies/{id}/lapse-check` (`manage_policies` gate); UI shows a
+> Lapse button / lapsed badge / Reinstate button. Smoke test green (1 passed).
+> See `.claude/plan-stage9.md`. The content below this banner is the original
+> kickoff note; kept as history. The next phase is to define the following stage.
+>
+> **STATUS / TOMORROW:**
+> - Code is done and verified: `policy_list.html` has Lapse + Reinstate buttons,
+>   `policies.py` `policy_list`/`policy_create` pass `outstanding`/`invoices`,
+>   reinstatement paths work (see commits in plan-stage9.md).
+> - **`git status` is dirty** — all Stage 9 files still modified, no Stage 9 commit.
+> - `.claude/plan-stage9.md` lists an uncommitted `policy_list.html` (the Reinstate
+>   button) as in-progress — it actually IS done; mark it done there.
+> - Do this first: `cd src/backend && PYTHONPATH=~/.venv/bin/python -m pytest api/test_smoke.py -q`
+>   (1 passed), then a single commit for the whole Stage 9 change (policies.py,
+>   policy_list.html, test_smoke.py, and the pre-existing invoices/payments/policies
+>   service edits) — NOT `.env` (gitignored at repo root line 24).
 
 Written 2026-09-23 ~11pm. Peter is asleep; come back tomorrow.
 

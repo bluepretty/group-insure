@@ -58,7 +58,7 @@
 <div class="card shadow-sm">
   <div class="card-body">
     <h2 class="h5 mb-3">Record payment</h2>
-    <form hx-post="/api/billing/payments/{{ invoice.id }}" hx-target="#content" hx-swap="innerHTML" class="row g-2 align-items-end">
+    <form hx-post="/api/billing/invoices/{{ invoice.id }}/payments" hx-target="#content" hx-swap="innerHTML" class="row g-2 align-items-end">
       <div class="col-sm-3">
         <label class="form-label mb-1 small">Amount</label>
         <input type="number" class="form-control" name="amount" step="0.01" min="0.01" required>

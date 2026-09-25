@@ -13,6 +13,7 @@ from app.models.invoice import Invoice
 from app.models.payment import Payment
 from app.models.policy import Policy
 from app.services.audit import record_log
+from app.services.policies import change_policy_status
 from app.services.premiums import policy_premium, refresh_policy_premium
 
 # A minimal, monotonic-ish invoice number per policy (e.g. "INV-1", "INV-2").
@@ -92,6 +93,11 @@ def create_invoice(
             f"An outstanding invoice ({existing.status}) already exists for this "
             "policy"
         )
+
+    if policy.status == "lapsed":
+        # Issuing a new invoice while the policy is lapsed reinstates it.
+        change_policy_status(db, policy_id=policy_id, to_status="active")
+        policy = db.get(Policy, policy_id)
 
     invoice = Invoice(
         policy_id=policy_id,
