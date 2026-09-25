@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.api import auth, audit, benefits, billing, claims, members, pages, parties, policies, products, premiums
+from app.api import auth, audit, benefits, billing, claims, members, pages, parties, policies, products, premiums, reports
 from app.core.database import engine, Base
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -35,6 +35,7 @@ app.include_router(claims.router)
 app.include_router(members.router)
 app.include_router(audit.router)
 app.include_router(pages.router)
+app.include_router(reports.router)
 
 # Import so models register with the metadata before create_all.
 from app import models  # noqa: E402,F401

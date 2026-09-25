@@ -1,0 +1,141 @@
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Reports</h2>
+  <span class="text-muted small">As of {{ report.as_of.strftime('%Y-%m-%d %H:%M UTC') }}</span>
+</div>
+
+<!-- Policyholders & Enrollment -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Enrollment</h2>
+    <div class="row g-3">
+      <div class="col-sm-4">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">Policyholders</div>
+            <div class="h3 mb-0">{{ report.policyholders }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-4">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">Policies</div>
+            <div class="h3 mb-0">{{ report.policies }}</div>
+            <div class="text-muted small">{{ report.open_policies }} live ({{ report.active_policies }} active, {{ report.lapsed_policies }} lapsed)</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-4">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">Members</div>
+            <div class="h3 mb-0">{{ report.active_members }}</div>
+            <div class="text-muted small">{{ report.members }} enrolled</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Coverage -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Coverage</h2>
+    <div class="row g-3">
+      <div class="col-sm-6">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">In-force enrolled premium</div>
+            <div class="h3 mb-0">${{ "%.2f"|format(report.enrolled_premium) }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">Policy premium</div>
+            <div class="h3 mb-0">${{ "%.2f"|format(report.policy_premium) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Claims -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Claims</h2>
+    <div class="row g-3">
+      <div class="col-sm-3">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">Open</div>
+            <div class="h5 mb-0">{{ report.claims_open }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-3">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">Paid</div>
+            <div class="h5 mb-0">{{ report.claims_paid }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-3">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">Denied</div>
+            <div class="h5 mb-0">{{ report.claims_denied }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-3">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">Closed</div>
+            <div class="h5 mb-0">{{ report.claims_closed }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-2 text-muted small">
+      Total claims: {{ report.claims_total }} · Paid out: ${{ "%.2f"|format(report.claims_paid_total) }}
+    </div>
+  </div>
+</div>
+
+<!-- Billing -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Billing</h2>
+    <div class="row g-3">
+      <div class="col-sm-4">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">Invoiced</div>
+            <div class="h5 mb-0">${{ "%.2f"|format(report.invoiced_total) }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-4">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">Paid</div>
+            <div class="h5 mb-0">${{ "%.2f"|format(report.paid_total) }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-4">
+        <div class="card bg-light border-0 h-100">
+          <div class="card-body">
+            <div class="text-muted small text-uppercase">Outstanding</div>
+            <div class="h5 mb-0">${{ "%.2f"|format(report.outstanding_total) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,4 +1,6 @@
 """Smoke test: verify DB tables, register, login, products, and policies round-trip."""
+import re
+
 from fastapi.testclient import TestClient
 
 from app.core.database import engine, SessionLocal, Base
@@ -10,6 +12,15 @@ def setup_test_db():
     # Start from a clean slate so the fixed test users can be registered on every run.
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+
+
+def _card_markup(html: str) -> str:
+    # Keep only the bodies of the four summary cards (the cards whose label row
+    # sits above the stat). Everything outside a `<div class="card ...">` block
+    # — the <title>, nav, etc. — is discarded so the "—" check can't trip on
+    # page chrome like the dashboard title.
+    parts = re.findall(r'<div class="card[^"]*">(.*?)</div>\s*</div>\s*</div>', html, re.S)
+    return "\n".join(parts)
 
 
 def test_smoke():
@@ -528,6 +539,84 @@ def test_smoke():
         headers={"Authorization": f"Bearer {broker_token}"},
     )
     assert r.status_code == 403, r.text
+
+    # --- Stage 8: reports -----------------------------------------------------
+
+    # The underwriter can read the platform-wide report (view_dashboard).
+    r = client.get(
+        "/api/reports",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    report = r.json()
+
+    # Well-formed: every key is present, counts are ints >= 0, totals are numbers >= 0.
+    expected_keys = {
+        "policyholders", "policies", "active_policies", "lapsed_policies",
+        "open_policies", "members", "active_members",
+        "enrolled_premium", "policy_premium",
+        "claims_total", "claims_open", "claims_paid", "claims_denied",
+        "claims_closed", "claims_paid_total",
+        "invoiced_total", "paid_total", "outstanding_total",
+    }
+    assert expected_keys.issubset(report.keys()), report.keys()
+    for count_key in (
+        "policyholders", "policies", "active_policies", "lapsed_policies",
+        "open_policies", "members", "active_members",
+        "claims_total", "claims_open", "claims_paid", "claims_denied",
+        "claims_closed",
+    ):
+        assert isinstance(report[count_key], int) and report[count_key] >= 0, (
+            count_key, report[count_key]
+        )
+    for total_key in (
+        "enrolled_premium", "policy_premium", "claims_paid_total",
+        "invoiced_total", "paid_total", "outstanding_total",
+    ):
+        assert isinstance(report[total_key], (int, float)) and report[total_key] >= 0, (
+            total_key, report[total_key]
+        )
+
+    # Reflect the fixture built earlier: one active policy, one enrolled member
+    # (the fixture terminates it, so `active_members` is legitimately 0), an
+    # in-force 10.00 election, and an issued-then-paid 10.00 invoice.
+    assert report["active_policies"] >= 1
+    assert report["policies"] >= 1
+    assert report["members"] >= 1
+    assert report["enrolled_premium"] >= 10.00, report["enrolled_premium"]
+    assert report["policy_premium"] >= 10.00, report["policy_premium"]
+    assert report["claims_total"] >= 1
+    assert report["claims_closed"] >= 1, report["claims_closed"]
+    assert report["claims_paid_total"] >= 300.0, report["claims_paid_total"]
+    assert report["invoiced_total"] >= 10.00, report["invoiced_total"]
+    assert report["paid_total"] >= 10.00, report["paid_total"]
+    assert report["outstanding_total"] >= 0.0, report["outstanding_total"]
+
+    # The HTMX partial renders against the same service.
+    r = client.get(
+        "/api/reports/list",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert "Reports" in r.text, r.text
+
+    # The dashboard home populates its four stat cards from the same report.
+    r = client.get(
+        "/dashboard",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert "—" not in _card_markup(r.text), (
+        "overview cards should be populated, not —"
+    )
+
+    # The broker can view the report too (view_dashboard), but the endpoint
+    # is still gated — an unauthenticated request is refused.
+    r = client.get(
+        "/api/reports",
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 200, r.text
 
     print("\nALL SMOKE TESTS PASSED ✓")
 
