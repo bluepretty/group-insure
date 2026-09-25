@@ -64,6 +64,15 @@
         hx-on::after-request="if (requestEvent.xhr.status === 200) { location.reload(); }"
         {% endif %}
       >Reinstate</a>
+      <a
+        href="#"
+        class="btn btn-sm btn-outline-secondary"
+        hx-post="/api/policies/{{ policy.id }}/close"
+        hx-target="#content"
+        hx-swap="innerHTML"
+        hx-on::after-request="if (requestEvent.xhr.status === 200) { location.reload(); }"
+        title="Close the policy once it has been lapsed for the grace period"
+      >Close</a>
       {% elif can_manage and policy.status == 'active' %}
       <a
         href="#"

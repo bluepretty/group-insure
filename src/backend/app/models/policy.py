@@ -25,6 +25,13 @@ class Policy(Base):
     )
     # "draft" | "active" | "lapsed" | "closed"
     status: Mapped[str] = mapped_column(String(20), default="draft")
+    # Populated on the first real status transition (see change_policy_status);
+    # stays None for a never-transitioned draft. Nullable on purpose — no
+    # migration on an existing DB, and nothing that reaches "lapsed" can have a
+    # None here.
+    status_changed_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     start_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     premium: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)

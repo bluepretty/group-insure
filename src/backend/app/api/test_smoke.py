@@ -618,6 +618,10 @@ def test_smoke():
     )
     assert r.status_code == 200, r.text
 
+    import datetime as _dt
+    from app.services.policies import GRACE_DAYS, close_policy
+    from app.core.database import SessionLocal as _SessionLocal
+
     # --- Stage 9: automated policy lapse ----------------------------------
 
     # Issue a new invoice for the (still active) policy, with a past due date.
@@ -665,6 +669,78 @@ def test_smoke():
         headers={"Authorization": f"Bearer {broker_token}"},
     )
     assert r.status_code == 403, r.text
+
+    # --- Stage 10: closed lapsed policies ----------------------------------
+
+    # Create a separate policy to drive the lapsed -> closed transition.
+    r = client.post(
+        "/api/policies/create",
+        data={
+            "policy_number": "POL-010",
+            "product_id": str(product_id),
+            "party_id": str(party_id),
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    r = client.get("/api/policies", headers={"Authorization": f"Bearer {token}"})
+    policy10 = next(p for p in r.json() if p["policy_number"] == "POL-010")
+    policy10_id = policy10["id"]
+
+    # Make it active, then issue an overdue invoice to trigger auto-lapse.
+    client.post(
+        f"/api/policies/{policy10_id}/status",
+        data={"to_status": "active"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    client.post(
+        "/api/billing/invoices",
+        data={"policy_id": str(policy10_id), "due_date": "2024-01-01"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    r = client.get(
+        f"/api/policies/{policy10_id}/lapse-check",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.json()["status"] == "lapsed", r.json()
+
+    # The grace window means a freshly-lapsed policy cannot be closed yet.
+    r = client.post(
+        f"/api/policies/{policy10_id}/close",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
+    # A broker cannot close a policy.
+    r = client.post(
+        f"/api/policies/{policy10_id}/close",
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
+    # Service-driven: inject `today`. Still inside the window -> refused.
+    _db = _SessionLocal()
+    try:
+        try:
+            close_policy(_db, policy_id=policy10_id, today=_dt.date.today())
+            assert False, "refuse a policy inside the grace window"
+        except ValueError:
+            pass
+
+        # Past the window -> closes to a terminal "closed".
+        future = _dt.date.today() + _dt.timedelta(days=GRACE_DAYS + 5)
+        closed = close_policy(_db, policy_id=policy10_id, today=future)
+        assert closed.status == "closed", closed.status
+
+        # Terminal: a second close is refused.
+        try:
+            close_policy(_db, policy_id=policy10_id, today=future)
+            assert False, "a closed policy must be terminal"
+        except ValueError:
+            pass
+    finally:
+        _db.close()
+
 
 
 if __name__ == "__main__":

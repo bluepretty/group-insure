@@ -130,3 +130,18 @@ def policy_lapse_check(
             "lapsed": policy.status == "lapsed",
         }
     )
+
+
+@router.post("/{policy_id}/close")
+def policy_close(
+    policy_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_role("manage_policies")),
+) -> JSONResponse:
+    from app.services.policies import close_policy
+
+    try:
+        policy = close_policy(db, policy_id=policy_id)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    return JSONResponse(content={"policy_id": policy_id, "status": policy.status})

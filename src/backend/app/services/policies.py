@@ -13,6 +13,9 @@ from app.services.audit import record_log
 
 VALID_STATUSES = ("draft", "active", "lapsed", "closed")
 
+# A policy must be lapsed this long before it can be closed.
+GRACE_DAYS = 30
+
 # Allowed status transitions. A policy can move forward from "draft" to
 # "active"; a non-paying policy lapses and can be reinstated or closed; once
 # "closed" a policy is terminal. "active" -> "draft" is not allowed.
@@ -93,6 +96,7 @@ def change_policy_status(db, policy_id: int, to_status: str) -> Policy:
         raise ValueError(
             f"Cannot move policy {policy.status!r} -> {to_status!r}"
         )
+    policy.status_changed_at = dt.datetime.now(dt.timezone.utc)
     policy.status = to_status
     db.commit()
     record_log(
@@ -124,3 +128,48 @@ def laps_if_overdue(db, *, policy_id: int, today: dt.date | None = None) -> Poli
     if invoice is None or invoice.due_date is None or invoice.due_date > today:
         return None
     return change_policy_status(db, policy_id=policy_id, to_status="lapsed")
+
+
+def _lapsed_for(db, policy: Policy, today: dt.date | None = None) -> int | None:
+    """Days the policy has been lapsed, or None if it is not currently lapsed.
+
+    Uses ``status_changed_at`` (set by ``change_policy_status`` on every
+    transition) as the single source of truth for "when did this status begin".
+    ``today`` is injectable for tests.
+    """
+    if policy.status != "lapsed" or policy.status_changed_at is None:
+        return None
+    today = today or dt.date.today()
+    changed_date = policy.status_changed_at.date()
+    return max(0, (today - changed_date).days)
+
+
+def close_policy(db, *, policy_id: int, today: dt.date | None = None) -> Policy:
+    """Close a lapsed policy that has outlived the grace period.
+
+    Only the ``lapsed -> closed`` transition is here, gated by ``GRACE_DAYS``.
+    Raises ValueError if the policy is unknown, not lapsed, or still inside the
+    grace window; raises 400 elsewhere via the API. Logs ``policy_closed``.
+    """
+    if today is None:
+        today = dt.date.today()
+    policy = db.get(Policy, policy_id)
+    if policy is None:
+        raise ValueError(f"Unknown policy_id: {policy_id}")
+    if policy.status != "lapsed":
+        raise ValueError(f"Only a lapsed policy can be closed (is '{policy.status}')")
+    lapsed_days = _lapsed_for(db, policy, today=today)
+    if lapsed_days is None or lapsed_days < GRACE_DAYS:
+        raise ValueError(
+            f"Policy {policy_id} has only been lapsed {lapsed_days} day(s); "
+            f"wait until it has been lapsed {GRACE_DAYS} days before closing"
+        )
+    change_policy_status(db, policy_id=policy_id, to_status="closed")
+    record_log(
+        db,
+        action="policy_closed",
+        entity="Policy",
+        entity_id=policy_id,
+        details=f"lapsed_days={lapsed_days}",
+    )
+    return db.get(Policy, policy_id)

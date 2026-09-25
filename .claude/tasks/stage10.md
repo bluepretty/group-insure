@@ -1,0 +1,7 @@
+- [x] Service: `close_policy` + `_lapsed_for` in services/policies.py
+- [x] Add `status_changed_at` column to Policy model + set it in `change_policy_status`
+- [x] API: `POST /api/policies/{policy_id}/close` underwriter-gated JSON
+- [x] Wire the **Close** button into policy_list.html (shows when lapsed)
+- [x] Extend smoke test (auto-lapse via overdue invoice → close → terminal; broker 403)
+- [x] Run smoke test & fix issues (1 passed)
+- [x] Commit

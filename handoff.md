@@ -121,3 +121,35 @@ Run **from `src/backend`** (templates/static are resolved relative to there). Th
   and closed by the time Stage 8 runs, so `claims_open == 0` and `claims_paid == 0` too; the
   test asserts on `claims_total` / `claims_closed` / `claims_paid_total`.
 
+
+## Stage 10 (Closed Lapsed Policies) — complete, committed
+- Spec: `.claude/plan-stage10.md`. The small sibling to Stage 9: closes the loop
+  so an unresolved lapse terminates the policy (`lapsed -> closed`) rather than
+  pinning it forever in `lapsed`. `_ALLOWED` already modelled the edge; nothing
+  triggered it. This only makes it reachable and gated by a grace window.
+- Service: `src/backend/app/services/policies.py` — `close_policy(db, *, policy_id,
+  today=None)` raises `ValueError` unless the policy is unknown, not lapsed, or
+  inside the grace window, then calls `change_policy_status(..., "closed")`
+  (logs `policy_closed`); `_lapsed_for(db, policy, today=None)` is the
+  day-count seam used by both `close_policy` and the service-level test.
+  `GRACE_DAYS = 30` module constant. `change_policy_status` now sets
+  `status_changed_at` on every transition, so the grace window is measured from
+  when the policy actually went `lapsed`, not from `start_date`.
+- Model: `src/backend/app/models/policy.py` — new nullable
+  `status_changed_at: datetime` on `Policy`, set by `change_policy_status`.
+  Nullable + no migration (existing DB); a policy only ever reaches `lapsed`
+  by transitioning from `active`, so the column is populated.
+- API: `src/backend/app/api/policies.py` — `POST /api/policies/{id}/close`,
+  underwriter-gated (`manage_policies`), `ValueError` → 400 JSON, returns
+  `{policy_id, status}`. Imported lazily to keep the smoke import path cheap.
+- UI: `templates/partials/policy_list.html` — **Close** button (after
+  Reinstate, `btn-outline-secondary`, warning title) shows only when
+  `can_manage and policy.status == 'lapsed'`; `hx-post`s the close endpoint and
+  reloads on success.
+- Smoke test: `src/backend/app/api/test_smoke.py` added a Stage 10 block —
+  API asserts auto-lapse then a too-recent close returns 400 and the broker
+  returns 403; service-driven with injected `today` asserts inside-the-window
+  refusal, close past the window, and the closed policy's terminal state.
+  **1 passed.**
+- No background sweep, no grace-timer service, no `void_policy` — that's a later
+  lapse follow-up. `GRACE_DAYS` is a module constant (not runtime config) in v1.
