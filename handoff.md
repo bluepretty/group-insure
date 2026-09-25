@@ -1,10 +1,12 @@
-# Handoff — Stage 7 (Claims) complete, next = define Stage 8
+# Handoff — Stage 8 (Reports) complete, next = define Stage 9
 
-> **UPDATE 2026-09-25: Stage 7 is now complete and committed.** Claims lifecycle
-> (open → under_review → paid|denied → closed) is implemented, wired into the
-> dashboard nav, and covered by the smoke test (green). See `claude/plan-stage7.md`.
-> The content below this banner is the original kickoff note; kept as history.
-> The next phase to pick up is whatever Stage 8 turns out to be.
+> **UPDATE 2026-09-25: Stage 8 is now complete and committed (commit `ae66d8b`).**
+> Reports / aggregate dashboard: `build_report()` service, JSON + HTMX endpoints,
+> the previously-dead **Reports** nav link wired, and the four dashboard overview
+> stat cards populated with real data. Smoke test green (1 passed). See
+> `claude/plan-stage8.md`. The content below this banner is the original kickoff
+> note; kept as history. The next phase to pick up is whatever Stage 9 turns out
+> to be.
 
 Written 2026-09-23 ~11pm. Peter is asleep; come back tomorrow.
 
@@ -15,8 +17,8 @@ The only thing that landed this session was wiring the **policy → premium summ
 link (the final unchecked plan item) plus the smoke-test assertion for it.
 
 ## Where to pick up
-Start with `claude/plan-stage6.md` — that file is the next phase's authoritative
-spec. If it isn't there yet, ask Peter what Stage 6 is before doing anything.
+Start with `claude/plan-stage9.md` — that file is the next phase's authoritative
+spec. If it isn't there yet, ask Peter what Stage 9 is before doing anything.
 
 ## Run tests (do this first tomorrow)
 ```
@@ -83,4 +85,30 @@ Run **from `src/backend`** (templates/static are resolved relative to there). Th
   unknown policy → 400; broker can view [200] but not create/adjudicate [403]). **1 passed.**
 - Quirks (same as before): new FastAPI `app.routes` are `_IncludedRouter` wrappers — verify via
   the smoke test, not introspection; `ValueError` → 400; smoke test uses a fresh in-memory DB.
+
+## Stage 8 (Reports) — complete, committed
+- Spec: `claude/plan-stage8.md`. Decisions locked in: open_policies = active + lapsed
+  (draft excluded); claims_open = open + under_review; gate on existing
+  `view_dashboard` (no new `view_reports` perm); platform-wide snapshot for v1.
+- Service: `src/backend/app/services/reports.py` — one `build_report(db) -> dict`, a
+  single read pass over Policy / Member / MemberBenefit / Benefit / Claim /
+  Invoice / Party tables. Returns a flat dict with counts + money totals
+  (`open_policies`, `enrolled_premium`, `claims_open`, `invoiced_total`, `paid_total`,
+  `outstanding_total`, …). `_positive_number()` keeps nullable columns from raising on
+  an empty DB.
+- API: `src/backend/app/api/reports.py` — JSON `GET /api/reports` + HTMX-partial
+  `GET /api/reports/list`, both gated on `view_dashboard`. Registered in `main.py`.
+- UI: `templates/partials/report_list.html` (reports grouped into Enrollment / Coverage /
+  Claims / Billing sections). `templates/auth/overview_partial.html` — the four overview
+  stat cards now pull from `report` instead of hard-coded `—`. `dashboard.html` — the dead
+  **Reports** nav link (`hx-get="#"`) → `hx-get="/api/reports/list"`.
+- Smoke test: added a Stage 8 block asserting a well-formed report dict (all keys present,
+  counts are ints ≥ 0, totals ≥ 0), reflecting fixture data (`active_policies/policies/members
+  ≥ 1`, `enrolled_premium/policy_premium ≥ 10.00`, `claims_total ≥ 1`, `invoiced/paid ≥ 10.00`),
+  the partial renders, the broker can read (view_dashboard) but an unauth read is refused, and
+  the dashboard page renders without any `—` in the card bodies. **1 passed.**
+- Note: the smoke fixture terminates its only member (Stage 4), so `active_members == 0` is
+  correct — the report asserts on total members, not active ones. Claim is fully adjudicated
+  and closed by the time Stage 8 runs, so `claims_open == 0` and `claims_paid == 0` too; the
+  test asserts on `claims_total` / `claims_closed` / `claims_paid_total`.
 
