@@ -80,6 +80,7 @@ _ROLE_PERMISSIONS: dict[str, set[str]] = {
         "manage_premiums",
         "view_billing",
         "manage_billing",
+        "view_claims",
     },
     "broker": {
         "view_dashboard",
@@ -90,6 +91,7 @@ _ROLE_PERMISSIONS: dict[str, set[str]] = {
         "view_benefits",
         "view_premiums",
         "view_billing",
+        "view_claims",
     },
 }
 

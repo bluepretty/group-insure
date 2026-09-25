@@ -1,9 +1,10 @@
-# Handoff — Stage 5 (Premium Pricing) complete, next = Stage 6
+# Handoff — Stage 7 (Claims) complete, next = define Stage 8
 
-> **UPDATE 2026-09-25: Stage 6 is now complete and committed (commit `56fb774`).**
-> See `claude/plan-stage6.md` for what was built. The content below this banner is
-> the original Stage 6 kickoff note from 2026-09-23; it is kept as-is for history.
-> The next phase to pick up is whatever Stage 7 turns out to be.
+> **UPDATE 2026-09-25: Stage 7 is now complete and committed.** Claims lifecycle
+> (open → under_review → paid|denied → closed) is implemented, wired into the
+> dashboard nav, and covered by the smoke test (green). See `claude/plan-stage7.md`.
+> The content below this banner is the original kickoff note; kept as history.
+> The next phase to pick up is whatever Stage 8 turns out to be.
 
 Written 2026-09-23 ~11pm. Peter is asleep; come back tomorrow.
 
@@ -60,3 +61,26 @@ Run **from `src/backend`** (templates/static are resolved relative to there). Th
 ## Stage 6
 - **Complete (2026-09-25). Committed.** Billing & payment processing: invoice + payment models, `view_billing`/`manage_billing` RBAC, invoice/payment services, `/api/billing` router, invoice partials, premium-summary → Invoices link. Smoke test covers Stage 6 (issue invoice → 10.00, full payment → paid, broker view vs 403 manage). See `claude/plan-stage6.md`.
 - Previously in progress (2026-09-25): Peter delegated scope; was being implemented.
+
+## Stage 7 (Claims) — complete, committed
+- Spec: `claude/plan-stage7.md`. Lifecycle: `open → under_review → paid|denied → closed`
+  (`closed` is terminal). Enforcement lives in the service layer; the API stays thin.
+- Models: `src/backend/app/models/claim.py` (`Claim`, nullable `policy/member/benefit` FKs,
+  `claim_amount`/`paid_amount` Numeric 12,2, `reason`, tz timestamps). Registered in
+  `models/__init__.py`.
+- RBAC: `view_claims` added to BOTH underwriter and broker; `manage_claims` stays underwriter-only.
+- Service: `src/backend/app/services/claims.py` — `list_claims`, `get_claim`, `create_claim`,
+  `mark_under_review`, `adjudicate`, `close_claim`. Raises `ValueError` → 400. FK lookups use
+  the actual `Member`/`Benefit` models (not string table names).
+- API: `src/backend/app/api/claims.py`, registered in `main.py`. JSON list = `GET /api/claims`,
+  detail = `GET /api/claims/{id}`, actions = POST `/review` `/adjudicate` `/close`.
+  HTMX partials = `GET /api/claims/list` and `GET /api/claims/detail`. `detail` sets
+  `can_manage = _has_permission(user, "manage_claims")`.
+- Templates: `templates/partials/claim_list.html`, `claim_detail.html` (gated action buttons).
+  Wired the previously-dead **Claims** dashboard nav → `hx-get="/api/claims/list"`.
+- Smoke test: added a Stage 7 block (file → open, list, fetch, review → under_review,
+  adjudicate 300 → paid, close → closed, closed is terminal [400], unknown → 404,
+  unknown policy → 400; broker can view [200] but not create/adjudicate [403]). **1 passed.**
+- Quirks (same as before): new FastAPI `app.routes` are `_IncludedRouter` wrappers — verify via
+  the smoke test, not introspection; `ValueError` → 400; smoke test uses a fresh in-memory DB.
+

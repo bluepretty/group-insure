@@ -22,6 +22,7 @@ Development is broken into stages. Each phase has an authoritative plan in
 4. **Product benefits + member coverage elections** — done
 5. **Premium pricing + allocation** — done
 6. **Billing & payment processing** — done (invoices, payments, `manage_billing`/`view_billing` permissions)
+7. **Claims** — done (raise/adjudicate/close claims via a small state machine, `view_claims`/`manage_claims`, `claude/plan-stage7.md`)
 
 ## Project layout
 

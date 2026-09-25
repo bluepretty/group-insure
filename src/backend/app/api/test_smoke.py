@@ -410,6 +410,125 @@ def test_smoke():
     )
     assert r.status_code == 400, r.text
 
+    # --- Stage 7: claims ------------------------------------------------------
+
+    # File a claim against the policy's benefit (underwriter / manage_claims).
+    r = client.post(
+        "/api/claims",
+        json={
+            "policy_id": policy_id,
+            "member_id": members[0]["id"],
+            "benefit_id": benefit_id,
+            "claim_amount": 500.0,
+            "reason": "Hospitalization",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    claim = r.json()
+    assert claim["status"] == "open", claim
+    assert claim["claim_amount"] == 500.0, claim
+
+    # List claims (JSON); the filed claim appears with its status.
+    r = client.get(
+        f"/api/claims?policy_id={policy_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    claims = r.json()
+    assert claim["id"] in [c["id"] for c in claims], claims
+    assert next(c for c in claims if c["id"] == claim["id"])["status"] == "open"
+
+    # Fetch the single claim.
+    r = client.get(
+        f"/api/claims/{claim['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "open", r.text
+
+    # Move to under_review, then adjudicate a partial payment -> "paid".
+    r = client.post(
+        f"/api/claims/{claim['id']}/review",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "under_review", r.text
+
+    r = client.post(
+        f"/api/claims/{claim['id']}/adjudicate",
+        json={"paid_amount": 300.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "paid", r.text
+    assert r.json()["paid_amount"] == 300.0, r.text
+
+    # Close the paid claim -> terminal "closed".
+    r = client.post(
+        f"/api/claims/{claim['id']}/close",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "closed", r.text
+
+    # A closed claim is terminal: another transition returns 400.
+    r = client.post(
+        f"/api/claims/{claim['id']}/review",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
+    # An unknown claim returns 404.
+    r = client.get(
+        "/api/claims/999999",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 404, r.text
+
+    # A claim referencing an unknown policy is rejected -> 400.
+    r = client.post(
+        "/api/claims",
+        json={"policy_id": 999999, "claim_amount": 100.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
+    # A broker can view claims (view_claims) but cannot manage them.
+    r = client.post(
+        "/api/auth/login",
+        json={"username": "testbroker", "password": "secret123"},
+    )
+    assert r.status_code == 200, r.text
+    broker_token = r.json()["access_token"]
+
+    r = client.get(
+        f"/api/claims?policy_id={policy_id}",
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert claim["id"] in [c["id"] for c in r.json()], r.text
+
+    r = client.post(
+        "/api/claims",
+        json={
+            "policy_id": policy_id,
+            "member_id": members[0]["id"],
+            "benefit_id": benefit_id,
+            "claim_amount": 100.0,
+        },
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
+    # The broker cannot adjudicate a claim either.
+    r = client.post(
+        f"/api/claims/{claim['id']}/adjudicate",
+        json={"paid_amount": 10.0},
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
     print("\nALL SMOKE TESTS PASSED ✓")
 
 

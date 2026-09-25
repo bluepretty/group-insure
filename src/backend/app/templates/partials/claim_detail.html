@@ -1,0 +1,77 @@
+{% if claim is none %}
+<h2 class="mb-3">Claim</h2>
+<p class="text-muted">Claim not found.</p>
+{% else %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Claim <span class="badge bg-secondary rounded-pill">{{ claim.status }}</span></h2>
+  <span class="badge bg-primary h5 mb-0">Claim: ${{ "%.2f"|format(claim.claim_amount if claim.claim_amount is not none else 0) }}</span>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Policy</dt>
+      <dd class="col-sm-8">{{ claim.policy_id }}</dd>
+      <dt class="col-sm-4">Member</dt>
+      <dd class="col-sm-8">{{ claim.member_id if claim.member_id is not none else '—' }}</dd>
+      <dt class="col-sm-4">Benefit</dt>
+      <dd class="col-sm-8">{{ claim.benefit_id if claim.benefit_id is not none else '—' }}</dd>
+      <dt class="col-sm-4">Claim amount</dt>
+      <dd class="col-sm-8">${{ "%.2f"|format(claim.claim_amount if claim.claim_amount is not none else 0) }}</dd>
+      <dt class="col-sm-4">Paid amount</dt>
+      <dd class="col-sm-8">${{ "%.2f"|format(claim.paid_amount) }}</dd>
+      <dt class="col-sm-4">Reason</dt>
+      <dd class="col-sm-8">{{ claim.reason if claim.reason else '—' }}</dd>
+      <dt class="col-sm-4">Created</dt>
+      <dd class="col-sm-8">{{ claim.created_at.strftime('%Y-%m-%d %H:%M') if claim.created_at is not none else '—' }}</dd>
+    </dl>
+  </div>
+</div>
+
+{% if can_manage and claim.status == 'open' %}
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Start review</h2>
+    <button
+      type="button"
+      class="btn btn-primary"
+      hx-post="/api/claims/{{ claim.id }}/review"
+      hx-target="#content"
+      hx-swap="innerHTML"
+    >Mark under review</button>
+  </div>
+</div>
+{% endif %}
+
+{% if can_manage and claim.status == 'under_review' %}
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Adjudicate</h2>
+    <form hx-post="/api/claims/{{ claim.id }}/adjudicate" hx-target="#content" hx-swap="innerHTML" class="row g-2 align-items-end">
+      <div class="col-sm-4">
+        <label class="form-label mb-1 small">Paid amount</label>
+        <input type="number" class="form-control" name="paid_amount" step="0.01" min="0" required>
+      </div>
+      <div class="col-sm-4">
+        <button type="submit" class="btn btn-primary w-100 mt-3">Adjudicate</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if can_manage and claim.status in ['paid', 'denied'] %}
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Close claim</h2>
+    <button
+      type="button"
+      class="btn btn-outline-primary"
+      hx-post="/api/claims/{{ claim.id }}/close"
+      hx-target="#content"
+      hx-swap="innerHTML"
+    >Mark closed</button>
+  </div>
+</div>
+{% endif %}
+{% endif %}
