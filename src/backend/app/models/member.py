@@ -8,6 +8,7 @@ import datetime as dt
 
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship as relationship_relationship
+from sqlalchemy import UniqueConstraint
 
 from app.core.database import Base
 
@@ -15,11 +16,13 @@ from app.core.database import Base
 class Member(Base):
     __tablename__ = "members"
 
+    __table_args__ = (UniqueConstraint("policy_id", "member_number", name="uq_member_policy_number"),)
+
     id: Mapped[int] = mapped_column(primary_key=True)
     policy_id: Mapped[int] = mapped_column(ForeignKey("policies.id"))
     party_id: Mapped[int | None] = mapped_column(ForeignKey("parties.id"), nullable=True)
     organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
-    # Unique per policy (enforced in service layer; DB-level index on Postgres).
+    # Unique per policy (enforced in service layer; DB-level composite unique below).
     member_number: Mapped[str] = mapped_column(String(60))
     first_name: Mapped[str] = mapped_column(String(80))
     last_name: Mapped[str] = mapped_column(String(80))

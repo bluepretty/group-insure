@@ -6,7 +6,7 @@ tracks money received. Invoice ``status`` is reconciled from ``paid_amount``.
 """
 import datetime as dt
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -14,6 +14,8 @@ from app.core.database import Base
 
 class Invoice(Base):
     __tablename__ = "invoices"
+
+    __table_args__ = (UniqueConstraint("policy_id", "invoice_number", name="uq_invoice_policy_number"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     policy_id: Mapped[int | None] = mapped_column(

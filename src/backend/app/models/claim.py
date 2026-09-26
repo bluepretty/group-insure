@@ -27,7 +27,7 @@ class Claim(Base):
     __tablename__ = "claims"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    claim_number: Mapped[str] = mapped_column(String(60))
+    claim_number: Mapped[str] = mapped_column(String(60), unique=True, index=True)
     policy_id: Mapped[int] = mapped_column(ForeignKey("policies.id"))
     member_id: Mapped[int] = mapped_column(ForeignKey("members.id"))
     benefit_id: Mapped[int | None] = mapped_column(

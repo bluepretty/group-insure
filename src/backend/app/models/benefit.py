@@ -6,7 +6,7 @@ allocation to each benefit is a later stage.
 """
 import datetime as dt
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -15,10 +15,11 @@ from app.core.database import Base
 class Benefit(Base):
     __tablename__ = "benefits"
 
+    __table_args__ = (UniqueConstraint("product_id", "code", name="uq_benefit_product_code"),)
+
     id: Mapped[int] = mapped_column(primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("product_catalog.id"))
-    # Unique per product (enforced in the service layer; DB-level index on
-    # Postgres).
+    # Unique per product (DB-level composite unique below).
     code: Mapped[str] = mapped_column(String(60))
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
