@@ -82,60 +82,70 @@ def census_add(
     prorated delta over the remaining period. Returns a summary dict with the
     new member, the proration, and the issued invoice.
     """
-    policy = db.get(Policy, policy_id)
-    if policy is None:
-        raise ValueError(f"Unknown policy_id: {policy_id}")
-    if policy.status != "active":
-        raise ValueError(
-            f"Policy {policy_id} is not active (is '{policy.status}'); census "
-            "changes require an active policy"
-        )
+    try:
+        policy = db.get(Policy, policy_id)
+        if policy is None:
+            raise ValueError(f"Unknown policy_id: {policy_id}")
+        if policy.status != "active":
+            raise ValueError(
+                f"Policy {policy_id} is not active (is '{policy.status}'); census "
+                "changes require an active policy"
+            )
 
-    event_type = "new_dependent" if (relationship or "").lower().startswith(
-        ("spouse", "child", "dependent")
-    ) else "new_member"
+        event_type = "new_dependent" if (relationship or "").lower().startswith(
+            ("spouse", "child", "dependent")
+        ) else "new_member"
 
-    member, added_premium = _add_effect(
-        db,
-        policy_id=policy_id,
-        member_number=member_number,
-        first_name=first_name,
-        last_name=last_name,
-        effective_date=effective_date,
-        relationship=relationship,
-        benefit_id=benefit_id,
-        election_amount=election_amount,
-        actor_id=actor_id,
-    )
-
-    record_event(
-        db,
-        policy_id=policy_id,
-        member_id=member.id,
-        event_type=event_type,
-        effective_date=effective_date,
-        actor_id=actor_id,
-        details=f"member_number={member_number}",
-    )
-
-    proration = prorate_policy(
-        db,
-        policy_id=policy_id,
-        effective_date=effective_date,
-        added_premium=added_premium,
-    )
-    reason = f"{event_type} effective {effective_date.isoformat()}"
-    invoice = None
-    if proration["adjustment"] != 0.0:
-        from app.services.invoices import issue_adjustment_invoice
-
-        invoice = issue_adjustment_invoice(
+        member, added_premium = _add_effect(
             db,
             policy_id=policy_id,
-            adjustment=proration["adjustment"],
+            member_number=member_number,
+            first_name=first_name,
+            last_name=last_name,
             effective_date=effective_date,
-            reason=reason,
+            relationship=relationship,
+            benefit_id=benefit_id,
+            election_amount=election_amount,
+            actor_id=actor_id,
         )
+
+        record_event(
+            db,
+            policy_id=policy_id,
+            member_id=member.id,
+            event_type=event_type,
+            effective_date=effective_date,
+            actor_id=actor_id,
+            details=f"member_number={member_number}",
+        )
+
+        proration = prorate_policy(
+            db,
+            policy_id=policy_id,
+            effective_date=effective_date,
+            added_premium=added_premium,
+        )
+        reason = f"{event_type} effective {effective_date.isoformat()}"
+        invoice = None
+        if proration["adjustment"] != 0.0:
+            from app.services.invoices import issue_adjustment_invoice
+
+            invoice = issue_adjustment_invoice(
+                db,
+                policy_id=policy_id,
+                adjustment=proration["adjustment"],
+                effective_date=effective_date,
+                reason=reason,
+            )
+    except Exception:
+        # All-or-nothing: roll back the shared session so a partial failure
+        # (duplicate member number, premium refresh, invoice insert) leaves no
+        # orphaned roster/life-event/premium changes behind.
+        db.rollback()
+        raise
+
+    # The optional email is a best-effort side effect — not part of the atomic
+    # transaction (a send failure must not undo a census change).
     _notify(db, policy_id, event_type, effective_date, proration["adjustment"], actor_id)
 
     return {
@@ -166,51 +176,61 @@ def census_remove(
     an adjustment invoice for the prorated credit over the remaining period.
     Returns a summary dict with the member, the proration, and the invoice.
     """
-    member = db.get(Member, member_id)
-    if member is None:
-        raise ValueError(f"Unknown member_id: {member_id}")
-    policy_id = member.policy_id
-    policy = db.get(Policy, policy_id)
-    if policy is None:
-        raise ValueError(f"Unknown policy_id: {policy_id}")
+    try:
+        member = db.get(Member, member_id)
+        if member is None:
+            raise ValueError(f"Unknown member_id: {member_id}")
+        policy_id = member.policy_id
+        policy = db.get(Policy, policy_id)
+        if policy is None:
+            raise ValueError(f"Unknown policy_id: {policy_id}")
 
-    event_type = (
-        "dependent_departed"
-        if (member.relationship or "").lower().startswith(("spouse", "child", "dependent"))
-        else "member_departed"
-    )
+        event_type = (
+            "dependent_departed"
+            if (member.relationship or "").lower().startswith(("spouse", "child", "dependent"))
+            else "member_departed"
+        )
 
-    departed_premium = float(per_member_premium(db, member_id=member_id) or 0)
+        departed_premium = float(per_member_premium(db, member_id=member_id) or 0)
 
-    terminate_member(db, member_id=member_id, termination_date=effective_date)
-    record_event(
-        db,
-        policy_id=policy_id,
-        member_id=member.id,
-        event_type=event_type,
-        effective_date=effective_date,
-        actor_id=actor_id,
-        details=f"member_number={member.member_number}",
-    )
-
-    proration = prorate_policy(
-        db,
-        policy_id=policy_id,
-        effective_date=effective_date,
-        departed_premium=departed_premium,
-    )
-    reason = f"{event_type} effective {effective_date.isoformat()}"
-    invoice = None
-    if proration["adjustment"] != 0.0:
-        from app.services.invoices import issue_adjustment_invoice
-
-        invoice = issue_adjustment_invoice(
+        terminate_member(db, member_id=member_id, termination_date=effective_date)
+        record_event(
             db,
             policy_id=policy_id,
-            adjustment=proration["adjustment"],
+            member_id=member.id,
+            event_type=event_type,
             effective_date=effective_date,
-            reason=reason,
+            actor_id=actor_id,
+            details=f"member_number={member.member_number}",
         )
+
+        proration = prorate_policy(
+            db,
+            policy_id=policy_id,
+            effective_date=effective_date,
+            departed_premium=departed_premium,
+        )
+        reason = f"{event_type} effective {effective_date.isoformat()}"
+        invoice = None
+        if proration["adjustment"] != 0.0:
+            from app.services.invoices import issue_adjustment_invoice
+
+            invoice = issue_adjustment_invoice(
+                db,
+                policy_id=policy_id,
+                adjustment=proration["adjustment"],
+                effective_date=effective_date,
+                reason=reason,
+            )
+    except Exception:
+        # All-or-nothing: roll back the shared session so a partial failure
+        # (termination, premium refresh, invoice insert) leaves no orphaned
+        # roster/life-event/premium changes behind.
+        db.rollback()
+        raise
+
+    # The optional email is a best-effort side effect — not part of the atomic
+    # transaction (a send failure must not undo a census change).
     _notify(db, policy_id, event_type, effective_date, proration["adjustment"], actor_id)
 
     return {

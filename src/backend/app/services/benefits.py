@@ -1,8 +1,9 @@
 """Benefit + member-coverage election helpers.
 
 A product offers a set of benefits; a member elects exactly one benefit.
-Benefit code uniqueness (per product) and the one-election-per-member rule are
-enforced in the service layer (DB-level unique indexes are added on Postgres).
+Benefit code uniqueness (per product) is enforced by a DB composite unique
+index (uq_benefit_product_code); the one-election-per-member rule is enforced
+in the service layer.
 """
 import datetime as dt
 from decimal import Decimal

@@ -1,7 +1,7 @@
 """Member CRUD + helpers. A member is an individual enrolled under a policy.
 
-Member numbers must be unique per policy, so that is enforced in the service
-layer (a DB-level unique index is added when we move to Postgres).
+Member numbers must be unique per policy, enforced by a DB composite unique
+index (uq_member_policy_number) added in the model.
 """
 import datetime as dt
 

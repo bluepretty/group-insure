@@ -1,7 +1,7 @@
 """Policy CRUD + helpers. A policy belongs to a product and a policyholder Party.
 
-Policy numbers must be unique per product, so that is enforced in the service
-layer (a DB-level unique index is added when we move to Postgres).
+Policy numbers must be unique per product, enforced by a DB composite unique
+index (uq_policy_policy_number) added in the model.
 """
 import datetime as dt
 
