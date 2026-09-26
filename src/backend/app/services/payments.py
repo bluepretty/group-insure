@@ -61,8 +61,13 @@ def record_payment(
         status="posted",
         payment_date=payment_date or dt.datetime.now(dt.timezone.utc),
     )
+    # Persist the payment and reconcile the invoice in a single transaction.
+    # The payment must be flushed before reconciling — ``_reconcile`` queries
+    # the DB for posted payments, so a not-yet-flushed payment would not be
+    # counted. One commit (the original code committed twice) means a crash
+    # cannot leave the payment durable while the invoice's status stays stale.
     db.add(payment)
-    db.commit()
+    db.flush()
     _reconcile(db, invoice)
     db.commit()
     if invoice.status == "paid" and invoice.policy_id is not None:

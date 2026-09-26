@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -40,6 +41,18 @@ app.include_router(life_events.router)
 app.include_router(pages.router)
 app.include_router(reports.router)
 app.include_router(statements.router)
+
+
+# Domain errors (ValueError raised by service/business logic) should surface as
+# a clean 400 rather than leaking as an unhandled 500, so clients get a stable,
+# structured error. Genuine bugs (TypeError, KeyError, DB/IntegrityError) are
+# intentionally *not* caught here and still reach FastAPI's default 500 handler.
+@app.exception_handler(ValueError)
+async def _handle_value_error(request, exc: ValueError):
+    return JSONResponse(
+        status_code=400, content={"detail": str(exc) or "Validation error"}
+    )
+
 
 # Import so models register with the metadata before create_all.
 from app import models  # noqa: E402,F401

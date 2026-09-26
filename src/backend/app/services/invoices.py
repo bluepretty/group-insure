@@ -99,8 +99,13 @@ def create_invoice(
     if premium is not None:
         policy.premium = round(float(premium), 2)
     else:
+        # Compute the premium in memory without committing yet. The outstanding
+        # invoice invariant below may still reject the renewal; committing the
+        # premium change before that check risks leaving a policy with a new
+        # premium and no invoice if the guard fails. `db.commit()` happens below
+        # once, together with the invoice insert, so the whole write is atomic.
         try:
-            refresh_policy_premium(db, policy_id=policy_id)
+            refresh_policy_premium(db, policy_id=policy_id, commit=False)
         except ValueError:
             raise
     policy = db.get(Policy, policy_id)

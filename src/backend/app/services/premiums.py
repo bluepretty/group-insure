@@ -92,20 +92,31 @@ def set_election_amount(db, *, member_id: int, amount: float) -> MemberBenefit:
     return election
 
 
-def refresh_policy_premium(db, policy_id: int) -> Policy:
-    """Compute and *persist* a policy's premium, the source of truth the invoice
-    service snapshots. Previously only computed in-memory, so commit the value
-    and record the change."""
+def refresh_policy_premium(
+    db,
+    policy_id: int,
+    *,
+    commit: bool = True,
+) -> Policy:
+    """Compute (and optionally persist) a policy's premium, the source of truth
+    the invoice service snapshots. Previously only computed in-memory, so when
+    ``commit`` is True the value is written and the change recorded.
+
+    Callers that are mid-transaction with an outstanding invariant to check
+    pass ``commit=False``: the premium is computed in-memory so the caller can
+    decide, in a single commit, whether the change is worth persisting.
+    """
     policy = db.get(Policy, policy_id)
     if policy is None:
         raise ValueError(f"Unknown policy_id: {policy_id}")
     policy_premium(db, policy_id=policy_id)
-    db.commit()
-    record_log(
-        db,
-        action="policy_premium_refresh",
-        entity="Policy",
-        entity_id=policy.id,
-        details=f"premium={policy.premium}",
-    )
+    if commit:
+        db.commit()
+        record_log(
+            db,
+            action="policy_premium_refresh",
+            entity="Policy",
+            entity_id=policy.id,
+            details=f"premium={policy.premium}",
+        )
     return policy
