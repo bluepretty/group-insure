@@ -1,5 +1,6 @@
 """FastAPI application factory and entrypoint."""
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,8 +22,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 templates = Jinja2Templates(directory="app/templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(parties.router)
