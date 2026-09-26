@@ -83,10 +83,14 @@ def policy_create(
         party_id=party_id,
     )
     policies = list_policies(db)
+    # NOTE: `products` is required by policy_list.html's form dropdown; omitting
+    # it silently yields an empty "Product" select (Starlette renders jinja2.Undefined
+    # as an empty iterable). Always pass it here, not just in policy_list().
     return templates.TemplateResponse(
         request,
         "partials/policy_list.html",
         {
+            "products": list_products(db),
             "policies": policies,
             "can_manage": True,
             "outstanding": {
