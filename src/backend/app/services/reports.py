@@ -48,11 +48,11 @@ def build_report(db) -> dict:
     - enrolled_premium: float  (sum of in-force elected premiums)
     - policy_premium: float    (sum of policy premiums)
     - claims_total: int
-    - claims_open: int  (open + under_review — anything not yet finalized)
+    - claims_open: int  (submitted + approved — awaiting finalization)
     - claims_paid: int
-    - claims_denied: int
-    - claims_closed: int
-    - claims_paid_total: float
+    - claims_denied: int  (rejected)
+    - claims_closed: int  (finalized — paid + rejected)
+    - claims_paid_total: float  (sum of amount_approved on paid claims)
     - invoiced_total: float
     - paid_total: float
     - outstanding_total: float  (invoiced_total - paid_total)
@@ -76,12 +76,16 @@ def build_report(db) -> dict:
 
     claims_total = len(claims)
     claims_open = sum(
-        1 for c in claims if c.status in ("open", "under_review")
+        1 for c in claims if c.status in ("submitted", "approved")
     )
     claims_paid = sum(1 for c in claims if c.status == "paid")
-    claims_denied = sum(1 for c in claims if c.status == "denied")
-    claims_closed = sum(1 for c in claims if c.status == "closed")
-    claims_paid_total = sum(_positive_number(c.paid_amount) for c in claims)
+    claims_denied = sum(1 for c in claims if c.status == "rejected")
+    claims_closed = sum(
+        1 for c in claims if c.status in ("paid", "rejected")
+    )
+    claims_paid_total = sum(
+        _positive_number(c.amount_approved) for c in claims if c.status == "paid"
+    )
 
     invoiced_total = sum(_positive_number(i.total_amount) for i in invoices)
     paid_total = sum(_positive_number(i.paid_amount) for i in invoices)

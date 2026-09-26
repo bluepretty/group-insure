@@ -1,3 +1,49 @@
+{% if can_manage or view_claims %}
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Submit a claim</h2>
+    <form
+      hx-post="/api/claims/submit"
+      hx-target="#content"
+      hx-swap="innerHTML"
+      class="row g-2 align-items-end"
+    >
+      <div class="col-sm-2">
+        <label class="form-label mb-1 small">Policy</label>
+        <select class="form-select" name="policy_id" min="1" required>
+          <option value="">Select…</option>
+          {% for policy in policies if policy.status == 'active' %}
+          <option value="{{ policy.id }}">{{ policy.policy_number }} ({{ policy.id }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label mb-1 small">Member ID</label>
+        <input type="number" class="form-control" name="member_id" min="1" required>
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label mb-1 small">Amount claimed</label>
+        <input type="number" class="form-control" name="amount_claimed" step="0.01" min="0.01" required>
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label mb-1 small">Incident date</label>
+        <input type="date" class="form-control" name="incident_date" value="{{ today.isoformat() if today else '' }}" required>
+      </div>
+      <div class="col-sm-2">
+        <label class="form-label mb-1 small">Benefit ID</label>
+        <input type="number" class="form-control" name="benefit_id" min="1" placeholder="optional">
+      </div>
+      <div class="col-sm-2">
+        <button type="submit" class="btn btn-primary w-100 mt-3">Submit claim</button>
+      </div>
+    </form>
+    <p class="text-muted small mt-2 mb-0">
+      Incident date must fall within the policy's active term; the member must be active on that policy.
+    </p>
+  </div>
+</div>
+{% endif %}
+
 {% if claims is none or claims|length == 0 %}
 <p class="text-muted">No claims yet.</p>
 {% else %}
@@ -5,27 +51,37 @@
   <table class="table table-align-middle mb-0">
     <thead>
       <tr>
-        <th>ID</th>
+        <th>Claim</th>
         <th>Policy</th>
         <th>Member</th>
-        <th>Benefit</th>
+        <th>Incident</th>
         <th>Status</th>
-        <th class="text-end">Claim</th>
-        <th class="text-end">Paid</th>
+        <th class="text-end">Claimed</th>
+        <th class="text-end">Approved</th>
       </tr>
     </thead>
     <tbody>
       {% for claim in claims %}
       <tr>
         <td>
-          <a href="#" class="fw-bold" hx-get="/api/claims/{{ claim.id }}" hx-target="#content" hx-swap="innerHTML">{{ claim.id }}</a>
+          <a href="#" class="fw-bold" hx-get="/api/claims/detail?claim_id={{ claim.id }}" hx-target="#content" hx-swap="innerHTML">{{ claim.claim_number }}</a>
         </td>
         <td>{{ claim.policy_id }}</td>
         <td>{{ claim.member_id if claim.member_id is not none else '—' }}</td>
-        <td>{{ claim.benefit_id if claim.benefit_id is not none else '—' }}</td>
-        <td><span class="badge bg-secondary rounded-pill">{{ claim.status }}</span></td>
-        <td class="text-end">${{ "%.2f"|format(claim.claim_amount if claim.claim_amount is not none else 0) }}</td>
-        <td class="text-end">${{ "%.2f"|format(claim.paid_amount) }}</td>
+        <td>{{ claim.incident_date }}</td>
+        <td>
+          {% if claim.status == 'approved' %}
+          <span class="badge bg-warning text-dark rounded-pill">{{ claim.status }}</span>
+          {% elif claim.status == 'paid' %}
+          <span class="badge bg-success rounded-pill">{{ claim.status }}</span>
+          {% elif claim.status == 'rejected' %}
+          <span class="badge bg-danger rounded-pill">{{ claim.status }}</span>
+          {% else %}
+          <span class="badge bg-secondary rounded-pill">{{ claim.status }}</span>
+          {% endif %}
+        </td>
+        <td class="text-end">${{ "%.2f"|format(claim.amount_claimed if claim.amount_claimed is not none else 0) }}</td>
+        <td class="text-end">${{ "%.2f"|format(claim.amount_approved if claim.amount_approved is not none else 0) }}</td>
       </tr>
       {% endfor %}
     </tbody>

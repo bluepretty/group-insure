@@ -1,129 +1,208 @@
-"""Claims + lifecycle (Stage 7).
+"""Claims management (Stage 14).
 
-A claim is a record raised against a policy for a covered benefit. Claims move
-through a small state machine:
+A claim is raised against a Policy for a specific enrolled Member, recording the
+incident that triggered it. Claims move through a small decision-and-payout
+lifecycle:
 
-    open -> under_review -> paid | denied -> closed (closed is terminal)
+    submitted -> approved -> paid
+            \\-> rejected        (rejected is terminal)
 
-Underwriters raise and adjudicate claims; brokers view them. All lifecycle
-transitions are enforced here so the API layer stays thin.
+``amount_approved`` is set when an underwriter approves a claim; it carries
+forward to ``paid``. All lifecycle transitions, validation, and the generated
+``claim_number`` live here so the API layer stays thin.
 """
-from sqlalchemy import select
+import datetime as dt
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.benefit import Benefit
 from app.models.claim import Claim
 from app.models.member import Member
-from app.models.benefit import Benefit
 from app.models.policy import Policy
 from app.services.audit import record_log
 
-# Valid transitions for each claim status. ``closed`` is terminal (no out-edges).
+# Generated in-memory claim numbers, e.g. "CLM-1", "CLM-2". Modeled after
+# invoices.py's in-memory counter; uniqueness is enforced against existing rows
+# in the service (no DB-level constraint, matching the member/policy-number
+# convention on an existing DB without a migration).
+_NEXT_CLAIM_COUNT = 0
+
+
+def _next_claim_number() -> str:
+    global _NEXT_CLAIM_COUNT
+    _NEXT_CLAIM_COUNT += 1
+    return f"CLM-{_NEXT_CLAIM_COUNT}"
+
+
+# Valid transitions for each claim status. ``approved`` and ``rejected`` are
+# both decision states; ``paid`` is terminal; ``rejected`` is terminal.
 _TRANSITIONS: dict[str, set[str]] = {
-    "open": {"under_review"},
-    "under_review": {"paid", "denied"},
-    "paid": {"closed"},
-    "denied": {"closed"},
-    "closed": set(),
+    "submitted": {"approved", "rejected"},
+    "approved": {"paid"},
+    "rejected": set(),
+    "paid": set(),
 }
 
 
 def list_claims(
-    db, *, policy_id: int | None = None, member_id: int | None = None
+    db: Session,
+    *,
+    policy_id: int | None = None,
+    member_id: int | None = None,
+    party_id: int | None = None,
 ) -> list[Claim]:
+    """Return claims, optionally filtered by policy, member, or policyholder.
+
+    ``party_id`` scopes to every policy held by a policyholder ``Party`` — used
+    by brokers to list all of a client's claims.
+    """
     stmt = select(Claim)
     if policy_id is not None:
         stmt = stmt.where(Claim.policy_id == policy_id)
     if member_id is not None:
         stmt = stmt.where(Claim.member_id == member_id)
+    if party_id is not None:
+        policy_ids = db.scalars(
+            select(Policy.id).where(Policy.party_id == party_id)
+        ).all()
+        if policy_ids:
+            stmt = stmt.where(Claim.policy_id.in_(policy_ids))
     stmt = stmt.order_by(Claim.created_at.desc())
     return db.scalars(stmt).all()
 
 
-def get_claim(db, claim_id: int) -> Claim:
+def get_claim(db: Session, claim_id: int) -> Claim:
     claim = db.get(Claim, claim_id)
     if claim is None:
         raise ValueError(f"Unknown claim_id: {claim_id}")
     return claim
 
 
-def _transition(db, claim: Claim, to_status: str) -> Claim:
-    allowed = _TRANSITIONS.get(claim.status, set())
-    if to_status not in allowed:
-        raise ValueError(
-            f"Cannot move claim #{claim.id} from '{claim.status}' to '{to_status}'"
-        )
-    claim.status = to_status
-    db.commit()
-    return claim
-
-
-def create_claim(
-    db,
+def submit_claim(
+    db: Session,
     *,
     policy_id: int,
-    member_id: int | None = None,
+    member_id: int,
+    amount_claimed: float,
+    incident_date: dt.date,
     benefit_id: int | None = None,
-    claim_amount: float | None = None,
-    reason: str | None = None,
+    description: str | None = None,
+    claim_number: str | None = None,
 ) -> Claim:
-    if db.get(Policy, policy_id) is None:
+    """Raise a new claim.
+
+    Validates that the policy exists and the incident date falls within its
+    active term, that the member exists, belongs to that policy, and is active,
+    and that ``claim_number`` is unique. Raises ``ValueError`` on any failure.
+    """
+    policy = db.get(Policy, policy_id)
+    if policy is None:
         raise ValueError(f"Unknown policy_id: {policy_id}")
-    if member_id is not None and db.get(Member, member_id) is None:
+
+    if incident_date is not None and (
+        policy.start_date is None
+        or incident_date < policy.start_date
+        or incident_date > policy.end_date
+    ):
+        raise ValueError(
+            f"Incident date {incident_date} is outside the policy term "
+            f"({policy.start_date} to {policy.end_date})"
+        )
+
+    member = db.get(Member, member_id)
+    if member is None:
         raise ValueError(f"Unknown member_id: {member_id}")
+    if member.policy_id != policy_id:
+        raise ValueError(
+            f"Member {member_id} does not belong to policy {policy_id}"
+        )
+    if getattr(member, "status", None) != "active":
+        raise ValueError(
+            f"Member {member_id} is not active (is '{getattr(member, 'status', None)}')"
+        )
+
     if benefit_id is not None and db.get(Benefit, benefit_id) is None:
         raise ValueError(f"Unknown benefit_id: {benefit_id}")
+
+    number = claim_number or _next_claim_number()
+    existing = db.scalar(
+        select(Claim).where(Claim.claim_number == number)
+    )
+    if existing is not None:
+        raise ValueError(f"Claim number '{number}' already exists")
+
     claim = Claim(
+        claim_number=number,
         policy_id=policy_id,
         member_id=member_id,
         benefit_id=benefit_id,
-        claim_amount=claim_amount,
-        reason=reason or None,
-        status="open",
-        paid_amount=0,
+        incident_date=incident_date,
+        amount_claimed=amount_claimed,
+        amount_approved=None,
+        description=description or None,
+        status="submitted",
     )
     db.add(claim)
     db.commit()
     record_log(
         db,
-        action="claim_create",
+        action="claim_submit",
         entity="Claim",
         entity_id=claim.id,
-        details=f"policy_id={policy_id} claim_amount={claim_amount}",
+        details=(
+            f"claim_number={number} policy_id={policy_id} "
+            f"member_id={member_id} amount_claimed={amount_claimed}"
+        ),
     )
     return claim
 
 
-def mark_under_review(db, claim_id: int) -> Claim:
-    claim = get_claim(db, claim_id)
-    return _transition(db, claim, "under_review")
+def update_claim_status(
+    db: Session,
+    *,
+    claim_id: int,
+    status: str,
+    amount_approved: float | None = None,
+) -> Claim:
+    """Move a claim to a new status (an underwriter action).
 
-
-def adjudicate(db, *, claim_id: int, paid_amount: float) -> Claim:
+    ``submitted`` -> {``approved``, ``rejected``}; ``approved`` -> ``paid``.
+    On approval ``amount_approved`` must be set and <= ``amount_claimed`` and is
+    carried forward to ``paid``. Raises ``ValueError`` on an illegal transition
+    or a missing/invalid approval amount.
+    """
     claim = get_claim(db, claim_id)
-    if paid_amount is None or paid_amount < 0:
-        raise ValueError("paid_amount must be a non-negative number")
-    if claim.status != "under_review":
+
+    if status not in _TRANSITIONS.get(claim.status, set()):
         raise ValueError(
-            f"Claim #{claim.id} must be 'under_review' to adjudicate "
-            f"(is '{claim.status}')"
+            f"Cannot move claim #{claim.claim_number} "
+            f"(is '{claim.status}') to '{status}'"
         )
-    claim.paid_amount = paid_amount
-    claim.status = "paid" if paid_amount > 0 else "denied"
+
+    if status == "approved":
+        if amount_approved is None or amount_approved <= 0:
+            raise ValueError("amount_approved must be set and positive to approve")
+        amount_claimed = getattr(claim, "amount_claimed", 0) or 0
+        if amount_approved > amount_claimed:
+            raise ValueError(
+                f"amount_approved ({amount_approved}) exceeds amount_claimed "
+                f"({amount_claimed})"
+            )
+        claim.amount_approved = amount_approved
+    elif status == "paid":
+        # A payout must approve against an approved amount.
+        if claim.amount_approved is None or claim.amount_approved <= 0:
+            raise ValueError("Cannot pay a claim without an approved amount")
+
+    claim.status = status
     db.commit()
     record_log(
         db,
-        action="claim_adjudicate",
+        action="claim_status_change",
         entity="Claim",
         entity_id=claim.id,
-        details=f"paid_amount={paid_amount} status={claim.status}",
+        details=f"{claim.status} -> {status}"
+        + (f" amount_approved={amount_approved}" if amount_approved is not None else ""),
     )
     return claim
-
-
-def close_claim(db, claim_id: int) -> Claim:
-    claim = get_claim(db, claim_id)
-    if claim.status not in {"paid", "denied"}:
-        raise ValueError(
-            f"Claim #{claim.id} must be 'paid' or 'denied' to close "
-            f"(is '{claim.status}')"
-        )
-    return _transition(db, claim, "closed")

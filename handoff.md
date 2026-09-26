@@ -313,3 +313,51 @@ Run **from `src/backend`** (templates/static are resolved relative to there). Th
   a broker (no `manage_policies`) is `403`. **1 passed.**
 - Security: professional accounts only (underwriter/broker); renew gated on
   `manage_policies`. JWT secret in `.env` (gitignored at repo root line 24).
+
+## Stage 14 (Claims Management) — complete, committed
+- Spec: `.claude/plan-stage14.md`. Stage 7's claim table (`claim_amount`/`paid_amount`/
+  `reason`) was a rough early prototype; Stage 14 **repurposes the existing `Claim` table**
+  as the single source of truth rather than adding a parallel claim model.
+- **Model:** `src/backend/app/models/claim.py` reworked — `claim_number` (service-generated,
+  unique, `CLM-` prefix, checked for uniqueness in the service layer), `policy_id` and `member_id`
+  (both required FKs — a claim is raised against a Policy for an enrolled Member), nullable
+  `benefit_id`, `incident_date: Date`, `amount_claimed`/`amount_approved` (Numeric 12,2),
+  nullable `description`, `status` (`submitted`/`approved`/`rejected`/`paid`), tz timestamps.
+- **Lifecycle:** `submitted → approved → paid` and `submitted → rejected` (`rejected` is
+  terminal; `approved` is decision-and-payout, `paid` is payout-complete). Guarded by
+  `_TRANSITIONS` in the service layer.
+- **Validation (service layer):** `submit_claim` raises `ValueError` if the policy is unknown,
+  the `incident_date` falls outside the policy `[start_date, end_date]` term, the member is
+  unknown / not enrolled in that policy / not active on that date, or the generated
+  `claim_number` collides. `update_claim_status` enforces the state machine, and on
+  `approved` requires `0 < amount_approved ≤ amount_claimed`; on `paid` requires an
+  `amount_approved` already set. Every mutation `record_log`s (`claim_submit` / `claim_status_change`).
+- **RBAC:** `view_claims` in BOTH underwriter and broker → both can submit and view claims on
+  policies they can see; `manage_claims` stays **underwriter only**, so a broker's attempt to
+  approve/reject a claim returns `403`.
+- **Service:** `src/backend/app/services/claims.py` — `list_claims` (policy/party scoping),
+  `get_claim`, `submit_claim`, `update_claim_status`.
+- **API:** `src/backend/app/api/claims.py` — JSON `GET /api/claims` (list, with policy/party
+  filters) and `GET /api/claims/{id}` (detail); `POST /api/claims` (submit, `view_claims`) and
+  a Form variant `POST /api/claims/submit` (HTMX); `GET /api/claims/detail` (HTMX partial with
+  adjudication buttons); `POST /api/claims/{id}/status` (JSON, `manage_claims`) and
+  `/status-form` (HTMX). `require_role` guards every handler. Registered in `main.py`.
+- **Templates:** `templates/partials/claim_list.html` — claims table (Claim/Policy/Member/
+  Incident/Status/Claimed/Approved) with status badges, a **Submit a claim** card (POSTs to
+  `/api/claims/submit`), gated on `can_manage or view_claims`. `claim_detail.html` — the detail
+  with an adjudication form (Approve with amount, Reject) shown for `submitted` claims and a
+  "Record payout" button for `approved` ones.
+- **Reports:** `src/backend/app/services/reports.py` — `claims_open` now `submitted`/`approved`;
+  `claims_paid` = `paid`; `claims_denied` = `rejected`; `claims_closed` = finalized
+  (`paid`+`rejected`); `claims_paid_total` sums `amount_approved` over `paid` claims. Report
+  keys unchanged, so Stage 8's report contract still holds.
+- **Smoke test:** `api/test_smoke.py` added a Stage 14 block — over a dated Jan 1 → Dec 31
+  fixture policy and a freshly enrolled active member, a broker files a claim (`200`), the list
+  and Form endpoints render, an out-of-term incident date `400`s, an underwriter approves/rejects,
+  a broker's approval attempt is `403`, and a genuinely anonymous `POST /api/claims/submit` is
+  `401`. **1 passed.** (The unauth assertion needs a fresh `TestClient` with no cookie store —
+  the shared client otherwise inherits the broker's session cookie and authenticates the call.)
+- **Quirks (same as before):** new FastAPI `app.routes` are `_IncludedRouter` wrappers — verify
+  via the smoke test, not introspection; `ValueError` → 400; smoke test uses a fresh in-memory DB.
+- **Security:** professional accounts only (underwriter/broker); `manage_claims` gate keeps
+  adjudication underwriter-only. JWT secret in `.env` (gitignored at repo root line 24).

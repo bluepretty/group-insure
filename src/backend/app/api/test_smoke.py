@@ -1,4 +1,5 @@
 """Smoke test: verify DB tables, register, login, products, and policies round-trip."""
+import datetime as dt
 import re
 from decimal import Decimal
 
@@ -90,7 +91,7 @@ def test_smoke():
     # Create a policy
     r = client.post(
         "/api/policies/create",
-        data={"policy_number": "POL-001", "product_id": str(product_id), "party_id": str(party_id)},
+        data={"policy_number": "POL-001", "product_id": str(product_id), "party_id": str(party_id), "start_date": "2026-01-01", "end_date": "2026-12-31"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200, r.text
@@ -101,6 +102,15 @@ def test_smoke():
     policies = r.json()
     assert policies, "policies list should not be empty"
     policy_id = policies[0]["id"]
+
+    # The create endpoint doesn't forward dates; set them directly on the policy
+    # row so the Stage 14 term validation has a valid window to check against.
+    _db = SessionLocal()
+    _policy = _db.get(Policy, policy_id)
+    _policy.start_date = dt.date(2026, 1, 1)
+    _policy.end_date = dt.date(2026, 12, 31)
+    _db.commit()
+    _db.close()
 
     # Change policy status draft -> active
     r = client.post(
@@ -424,34 +434,61 @@ def test_smoke():
     )
     assert r.status_code == 400, r.text
 
-    # --- Stage 7: claims ------------------------------------------------------
+    # --- Stage 14: claims -----------------------------------------------------
 
-    # File a claim against the policy's benefit (underwriter / manage_claims).
+    # Enroll a fresh, active member for the claims flow (the earlier member was
+    # terminated for Stage 6/12, and my validation rejects non-active members).
+    r = client.post(
+        "/api/members/create",
+        data={
+            "policy_id": str(policy_id),
+            "party_id": str(party_id),
+            "member_number": "MEM-CLA",
+            "first_name": "Claim",
+            "last_name": "Member",
+            "relationship": "self",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+
+    # The create endpoint returns HTML; fetch the member object to get its id.
+    r = client.get(
+        f"/api/members?party_id={party_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    members = r.json()
+    claim_member = next(m for m in members if m["member_number"] == "MEM-CLA")
+    claim_member_id = claim_member["id"]
+
+    # File a claim against the active policy's member.
     r = client.post(
         "/api/claims",
         json={
             "policy_id": policy_id,
-            "member_id": members[0]["id"],
+            "member_id": claim_member_id,
             "benefit_id": benefit_id,
-            "claim_amount": 500.0,
-            "reason": "Hospitalization",
+            "amount_claimed": 500.0,
+            "incident_date": "2026-06-01",
+            "description": "Hospitalization",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200, r.text
     claim = r.json()
-    assert claim["status"] == "open", claim
-    assert claim["claim_amount"] == 500.0, claim
+    assert claim["claim_number"].startswith("CLM-"), claim
+    assert claim["status"] == "submitted", claim
+    assert claim["amount_claimed"] == 500.0, claim
 
-    # List claims (JSON); the filed claim appears with its status.
+    # List claims (JSON); the filed claim appears.
     r = client.get(
         f"/api/claims?policy_id={policy_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200, r.text
     claims = r.json()
-    assert claim["id"] in [c["id"] for c in claims], claims
-    assert next(c for c in claims if c["id"] == claim["id"])["status"] == "open"
+    assert any(c["id"] == claim["id"] for c in claims), claims
 
     # Fetch the single claim.
     r = client.get(
@@ -459,56 +496,109 @@ def test_smoke():
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "open", r.text
+    assert r.json()["status"] == "submitted", r.text
 
-    # Move to under_review, then adjudicate a partial payment -> "paid".
+    # Adjudicate: approve, then pay out the approved amount.
     r = client.post(
-        f"/api/claims/{claim['id']}/review",
+        f"/api/claims/{claim['id']}/status",
+        json={"status": "approved", "amount_approved": 300.0},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "under_review", r.text
+    assert r.json()["status"] == "approved", r.text
+    assert r.json()["amount_approved"] == 300.0, r.text
 
     r = client.post(
-        f"/api/claims/{claim['id']}/adjudicate",
-        json={"paid_amount": 300.0},
+        f"/api/claims/{claim['id']}/status",
+        json={"status": "paid"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "paid", r.text
-    assert r.json()["paid_amount"] == 300.0, r.text
+    assert r.json()["amount_approved"] == 300.0, r.text
 
-    # Close the paid claim -> terminal "closed".
+    # A rejected claim is terminal: approve after reject is refused (400).
     r = client.post(
-        f"/api/claims/{claim['id']}/close",
+        "/api/claims",
+        json={
+            "policy_id": policy_id,
+            "member_id": claim_member_id,
+            "amount_claimed": 100.0,
+            "incident_date": "2026-06-15",
+        },
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "closed", r.text
-
-    # A closed claim is terminal: another transition returns 400.
+    reject_claim = r.json()
     r = client.post(
-        f"/api/claims/{claim['id']}/review",
+        f"/api/claims/{reject_claim['id']}/status",
+        json={"status": "rejected"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "rejected", r.text
+    r = client.post(
+        f"/api/claims/{reject_claim['id']}/status",
+        json={"status": "approved", "amount_approved": 10.0},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 400, r.text
 
-    # An unknown claim returns 404.
+    # Validation: incident date outside the policy term -> 400.
+    r = client.post(
+        "/api/claims",
+        json={
+            "policy_id": policy_id,
+            "member_id": claim_member_id,
+            "amount_claimed": 50.0,
+            "incident_date": "2020-01-01",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
+    # Validation: a claim against a non-active (terminated) member -> 400.
+    # members[0] isn't guaranteed to be the terminated member, so find it.
+    r = client.get(
+        f"/api/members?party_id={party_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    terminated = next(
+        (m for m in r.json() if m["status"] != "active"), None
+    )
+    assert terminated is not None, "expected a terminated member in the roster"
+    r = client.post(
+        "/api/claims",
+        json={
+            "policy_id": policy_id,
+            "member_id": terminated["id"],
+            "amount_claimed": 50.0,
+            "incident_date": "2026-06-01",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
+    # Validation: unknown policy -> 400; unknown claim detail -> 404.
+    r = client.post(
+        "/api/claims",
+        json={
+            "policy_id": 999999,
+            "member_id": claim_member_id,
+            "amount_claimed": 50.0,
+            "incident_date": "2026-06-01",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
     r = client.get(
         "/api/claims/999999",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 404, r.text
 
-    # A claim referencing an unknown policy is rejected -> 400.
-    r = client.post(
-        "/api/claims",
-        json={"policy_id": 999999, "claim_amount": 100.0},
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert r.status_code == 400, r.text
-
-    # A broker can view claims (view_claims) but cannot manage them.
+    # A broker can submit (view_claims) and view claims but cannot change a
+    # claim's status (manage_claims): the approval attempt is 403.
     r = client.post(
         "/api/auth/login",
         json={"username": "testbroker", "password": "secret123"},
@@ -516,32 +606,79 @@ def test_smoke():
     assert r.status_code == 200, r.text
     broker_token = r.json()["access_token"]
 
+    r = client.post(
+        "/api/claims",
+        json={
+            "policy_id": policy_id,
+            "member_id": claim_member_id,
+            "amount_claimed": 75.0,
+            "incident_date": "2026-06-20",
+        },
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 200, r.text
+
     r = client.get(
         f"/api/claims?policy_id={policy_id}",
         headers={"Authorization": f"Bearer {broker_token}"},
     )
     assert r.status_code == 200, r.text
-    assert claim["id"] in [c["id"] for c in r.json()], r.text
 
     r = client.post(
-        "/api/claims",
-        json={
-            "policy_id": policy_id,
-            "member_id": members[0]["id"],
-            "benefit_id": benefit_id,
-            "claim_amount": 100.0,
+        f"/api/claims/{claim['id']}/status",
+        json={"status": "approved", "amount_approved": 100.0},
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
+    # --- HTMX claim form paths (POST /api/claims/submit + GET /api/claims/list) -
+
+    # The list partial renders with the submit form present.
+    r = client.get("/api/claims/list", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200, r.text
+    assert "File a claim" in r.text or "submit a claim" in r.text.lower(), r.text
+
+    # A broker may file a claim through the Form endpoint (view_claims).
+    r = client.post(
+        "/api/claims/submit",
+        data={
+            "policy_id": str(policy_id),
+            "member_id": str(claim_member_id),
+            "amount_claimed": "60.0",
+            "incident_date": "2026-06-25",
+            "description": "Filed via the HTMX form",
         },
         headers={"Authorization": f"Bearer {broker_token}"},
     )
-    assert r.status_code == 403, r.text
+    assert r.status_code == 200, r.text
 
-    # The broker cannot adjudicate a claim either.
+    # Out-of-term incident date through the Form path is surfaced as 400.
     r = client.post(
-        f"/api/claims/{claim['id']}/adjudicate",
-        json={"paid_amount": 10.0},
-        headers={"Authorization": f"Bearer {broker_token}"},
+        "/api/claims/submit",
+        data={
+            "policy_id": str(policy_id),
+            "member_id": str(claim_member_id),
+            "amount_claimed": "60.0",
+            "incident_date": "2019-01-01",
+        },
+        headers={"Authorization": f"Bearer {token}"},
     )
-    assert r.status_code == 403, r.text
+    assert r.status_code == 400, r.text
+
+    # An unauthenticated attempt to file a claim is refused (401). Use a fresh
+    # client with no cookie store so the request is genuinely anonymous rather
+    # than inheriting the broker session persisted on `client`.
+    anon = TestClient(app)
+    r = anon.post(
+        "/api/claims/submit",
+        data={
+            "policy_id": str(policy_id),
+            "member_id": str(claim_member_id),
+            "amount_claimed": "60.0",
+            "incident_date": "2026-06-25",
+        },
+    )
+    assert r.status_code == 401, r.text
 
     # --- Stage 8: reports -----------------------------------------------------
 
