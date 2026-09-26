@@ -4,4 +4,4 @@
 - [x] Wire the **Close** button into policy_list.html (shows when lapsed)
 - [x] Extend smoke test (auto-lapse via overdue invoice → close → terminal; broker 403)
 - [x] Run smoke test & fix issues (1 passed)
-- [x] Commit
+- [x] Commit (548d02e)

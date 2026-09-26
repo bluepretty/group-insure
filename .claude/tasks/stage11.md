@@ -1,0 +1,14 @@
+- [x] Part 0: shared email validator (`validators.py`)
+- [x] Part 0: add `email` column to Party/Organization/User models
+- [x] Part 0: validate email at entry in parties/orgs/auth
+- [x] Part 1: `statements.py` `build_statement` service
+- [x] Part 2: ReportLab PDF renderer
+- [x] Part 3: preview + download endpoints (`statements.py` router)
+- [x] Part 3: register router in main.py
+- [x] Part 4: preview modal + buttons in policy_list.html
+- [x] Part 4: statement.html partial + print CSS
+- [x] Part 5: SMTP config in core/config.py
+- [x] Part 5: `emails.py` sender + confirm/send endpoint
+- [x] Testing: extend test_smoke.py
+- [x] Run smoke test & fix
+- [x] Commit
