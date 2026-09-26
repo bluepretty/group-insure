@@ -4,7 +4,8 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.auth import require_role
+from app.api.auth import _has_permission, require_role, require_user
+from app.api.auth import User
 from app.core.database import get_db
 from app.services.products import add_product, list_products
 from app.view import templates
@@ -28,12 +29,16 @@ def list_products_endpoint(
 
 
 @router.get("/list")
-def product_list(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+def product_list(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> HTMLResponse:
     products = list_products(db)
     return templates.TemplateResponse(
         request,
         "partials/product_list.html",
-        {"products": products},
+        {"products": products, "manage_products": _has_permission(user, "manage_products")},
     )
 
 

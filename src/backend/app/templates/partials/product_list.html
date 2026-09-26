@@ -2,6 +2,7 @@
   <h2 class="mb-0">Product catalog</h2>
 </div>
 
+{% if manage_products %}
 <div class="card shadow-sm mb-4">
   <div class="card-body">
     <form hx-post="/api/products/create" hx-target="#content" hx-swap="innerHTML">
@@ -25,6 +26,7 @@
     </form>
   </div>
 </div>
+{% endif %}
 
 <ul class="list-group">
   {% for product in products %}

@@ -5,7 +5,7 @@ endpoints are served via HTML templates for the server-rendered admin UI.
 """
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
@@ -138,13 +138,44 @@ def register(payload: RegisterModel, db: Session = Depends(get_db)) -> dict:
 
 
 @router.post("/login", response_model=dict)
-def login(payload: LoginModel, db: Session = Depends(get_db)) -> dict:
-    user = db.scalar(select(User).where(User.username == payload.username))
-    if not user or not verify_password(payload.password, user.password):
+async def login(
+    request: Request,
+    username: str | None = Form(None),
+    password: str | None = Form(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Authenticate and issue a JWT.
+
+    Accepts both `application/x-www-form-urlencoded` (the server-rendered
+    login.html form, the normal browser path) and `application/json` (API/HTMX
+    clients that POST a JSON body). FastAPI can't merge a Form field and a
+    JSON body in one signature, so we pull the raw JSON body ourselves when no
+    form fields are present.
+    """
+    # HTML form posts urlencoded data — take those first.
+    if username is None or password is None:
+        # Fall back to a JSON body (API/HTMX clients).
+        try:
+            data = await request.json()
+            username = data.get("username")
+            password = data.get("password")
+        except Exception:
+            username = password = None
+    if not username or not password:
+        raise HTTPException(
+            status_code=400, detail="username and password are required"
+        )
+    user = db.scalar(select(User).where(User.username == username))
+    if not user or not verify_password(password, user.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_token(user.id, user.roles)
     resp = JSONResponse(content={"access_token": token, "token_type": "bearer"})
     resp.set_cookie("access_token", token, httponly=True, samesite="lax")
+    # htmx-native redirect: the server-rendered login form uses an
+    # ``hx-post`` form whose ``hx-on::after-request`` was unreliable because the
+    # JSON body isn't a swap-valid target. htmx's ``HX-Redirect`` header, however,
+    # makes the client navigate itself regardless of swap validity — no JS needed.
+    resp.headers["HX-Redirect"] = "/dashboard"
     record_log(db, action="login", actor_id=user.id, entity="User", entity_id=user.id)
     return resp
 
