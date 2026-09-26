@@ -8,6 +8,44 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <link href="/static/css/style.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.4" defer></script>
+  <script>
+    // Global HTMX error handling. Without this, a 401/403/422 response (which the
+    // backend returns as a JSON body like {"detail": "..."}) is swapped as raw HTML
+    // into #content by htmx's default action, leaving a page full of JSON text.
+    // Instead we stop that default behaviour and degrade gracefully:
+    //   - 401  -> the session is gone; bounce the user back to login.
+    //   - 403  -> authenticated but not allowed; show a dismissible alert in place.
+    //   - else -> show the backend's detail message as an alert.
+    document.addEventListener("htmx:responseError", function (evt) {
+      var xhr = evt.xhr;
+      if (xhr.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      // Stop htmx from injecting the JSON body into #content.
+      evt.preventDefault();
+      var detail = xhr.responseText;
+      try {
+        detail = JSON.parse(detail).detail || detail;
+      } catch (e) { /* leave raw text if it isn't JSON */ }
+      var statusLabel = xhr.status === 403 ? "Access denied"
+                      : xhr.status === 422 ? "Invalid request"
+                      : "Request failed";
+      var box = document.getElementById("htmx-error-banner");
+      if (!box) {
+        box = document.createElement("div");
+        box.id = "htmx-error-banner";
+        box.className = "position-fixed top-0 start-50 translate-middle-x p-3";
+        box.style.zIndex = "1080";
+        document.body.appendChild(box);
+      }
+      box.innerHTML =
+        '<div class="alert alert-danger alert-dismissible fade show" role="alert">' +
+          '<strong>' + statusLabel + ' (' + xhr.status + ').</strong> ' + detail +
+          '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+        '</div>';
+    });
+  </script>
 </head>
 <body class="bg-body-tertiary">
   {% block body %}{% endblock %}
