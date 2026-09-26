@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.auth import require_role
+from app.api.auth import User, require_role
 from app.core.database import get_db
 from app.services.benefits import list_benefits
 from app.services.census import census_add, census_remove
@@ -45,6 +45,7 @@ def list_members_endpoint(
 def member_list(
     request: Request,
     db: Session = Depends(get_db),
+    user: User = Depends(require_role("view_members")),
     party_id: int | None = None,
 ) -> HTMLResponse:
     members = list_members(db, party_id=party_id)

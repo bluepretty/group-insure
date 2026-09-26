@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.auth import require_role
+from app.api.auth import User, require_role
 from app.core.database import get_db
 from app.services.benefits import (
     add_benefit,
@@ -79,6 +79,7 @@ def member_coverage_partial(
 def benefit_list(
     request: Request,
     db: Session = Depends(get_db),
+    user: User = Depends(require_role("view_benefits")),
     product_id: int | None = None,
 ) -> HTMLResponse:
     benefits = list_benefits(db, product_id=product_id)
