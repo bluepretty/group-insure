@@ -13,6 +13,8 @@ forward to ``paid``. All lifecycle transitions, validation, and the generated
 """
 import datetime as dt
 
+import re
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -22,17 +24,22 @@ from app.models.member import Member
 from app.models.policy import Policy
 from app.services.audit import record_log
 
-# Generated in-memory claim numbers, e.g. "CLM-1", "CLM-2". Modeled after
-# invoices.py's in-memory counter; uniqueness is enforced against existing rows
-# in the service (no DB-level constraint, matching the member/policy-number
-# convention on an existing DB without a migration).
-_NEXT_CLAIM_COUNT = 0
+# Claim numbers (e.g. "CLM-1", "CLM-2") are derived from the database rather
+# than an in-memory counter. A `+= 1` on a module global is a non-atomic
+# read-modify-write, so two concurrent submissions in FastAPI's thread pool can
+# both read the same count and emit the same claim_number — which then trips the
+# `claim_number unique=True` index and surfaces as an opaque 500. Deriving from
+# the DB avoids both the race and restart-duplicate numbers.
+CLAIM_NUMBER_RE = re.compile(r"^CLM-(\d+)$")
 
 
-def _next_claim_number() -> str:
-    global _NEXT_CLAIM_COUNT
-    _NEXT_CLAIM_COUNT += 1
-    return f"CLM-{_NEXT_CLAIM_COUNT}"
+def _next_claim_number(db: Session) -> str:
+    highest = 0
+    for claim in db.scalars(select(Claim)).all():
+        m = CLAIM_NUMBER_RE.match(claim.claim_number or "")
+        if m:
+            highest = max(highest, int(m.group(1)))
+    return f"CLM-{highest + 1}"
 
 
 # Valid transitions for each claim status. ``approved`` and ``rejected`` are
@@ -125,7 +132,7 @@ def submit_claim(
     if benefit_id is not None and db.get(Benefit, benefit_id) is None:
         raise ValueError(f"Unknown benefit_id: {benefit_id}")
 
-    number = claim_number or _next_claim_number()
+    number = claim_number or _next_claim_number(db)
     existing = db.scalar(
         select(Claim).where(Claim.claim_number == number)
     )

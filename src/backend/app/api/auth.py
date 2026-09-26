@@ -20,6 +20,12 @@ from app.services.validators import validate_email
 
 router = APIRouter(tags=["auth"])
 
+# Server-owned allow-list of professional roles. Registration does NOT pass
+# caller-supplied roles straight through to the stored row — see `register`.
+# This is the single source of truth for "who may exist"; `_ROLE_PERMISSIONS`
+# below maps each allowed role to what it may do.
+ALLOWED_ROLES: tuple[str, ...] = ("underwriter", "broker")
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 
@@ -57,7 +63,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User | 
 
 
 def require_user(user: User = Depends(get_current_user)) -> User:
-    if not user:
+    if not user or not user.active:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
@@ -124,10 +130,22 @@ def register(payload: RegisterModel, db: Session = Depends(get_db)) -> dict:
         email = validate_email(payload.email)
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
+    roles = (payload.roles or "").strip()
+    if roles not in ALLOWED_ROLES:
+        # The stored role is *server-owned*: a caller can not self-grant any
+        # permission. Reject before writing anything rather than falling back to
+        # a safe default, so a typo doesn't silently register a usable account.
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid role {payload.roles!r}. "
+                f"Allowed roles: {', '.join(ALLOWED_ROLES)}"
+            ),
+        )
     user = User(
         username=payload.username,
         password=hash_password(payload.password),
-        roles=payload.roles,
+        roles=roles,   # validated against ALLOWED_ROLES above
         email=email,
         active=True,
     )

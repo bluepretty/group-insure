@@ -9,13 +9,23 @@ from app.core.database import Base
 
 
 def hash_password(password: str) -> str:
+    # bcrypt rejects anything above 72 bytes; truncate to match bcrypt's real
+    # behaviour (it silently ignores trailing bytes) so long passwords register
+    # and verify consistently instead of raising a 500 on registration.
+    password = password.encode("utf-8")[:72]
     salt = bcrypt.gensalt(rounds=12)
-    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+    return bcrypt.hashpw(password, salt).decode("utf-8")
 
 
 def verify_password(password: str, hashed: str) -> bool:
+    # Match ``hash_password``: bcrypt rejects inputs above 72 bytes, so a long
+    # password must be truncated to the same bytes that were actually hashed or
+    # ``checkpw`` raises ``ValueError`` and login fails for a perfectly valid
+    # password.
     try:
-        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+        return bcrypt.checkpw(
+            password.encode("utf-8")[:72], hashed.encode("utf-8")
+        )
     except (ValueError, TypeError):
         return False
 

@@ -6,8 +6,10 @@ premium. ``total_amount`` snapshots the policy premium at issue time; the invoic
 outstanding (unpaid) invoice is issued per policy.
 """
 import datetime as dt
+import re
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.models.invoice import Invoice
 from app.models.payment import Payment
@@ -16,14 +18,24 @@ from app.services.audit import record_log
 from app.services.policies import change_policy_status
 from app.services.premiums import policy_premium, refresh_policy_premium
 
-# A minimal, monotonic-ish invoice number per policy (e.g. "INV-1", "INV-2").
-_INV_COUNT = {}
+# Invoice numbers (e.g. "INV-1", "INV-2" per policy) are derived from the
+# database rather than an in-memory counter. A `+= 1` on a module global is a
+# non-atomic read-modify-write, so two concurrent submissions in FastAPI's thread
+# pool can both read the same count and emit the same invoice_number — which then
+# trips the (policy_id, invoice_number) unique index and surfaces as an opaque
+# 500. Deriving from the DB avoids both the race and restart-duplicate numbers.
+INVOICE_NUMBER_RE = re.compile(r"^INV-(\d+)(?:-ADJ)?$")
 
 
-def _next_invoice_number(policy_id: int) -> str:
-    count = _INV_COUNT.get(policy_id, 0) + 1
-    _INV_COUNT[policy_id] = count
-    return f"INV-{count}"
+def _next_invoice_number(db: Session, policy_id: int) -> str:
+    highest = 0
+    for inv in db.scalars(
+        select(Invoice).where(Invoice.policy_id == policy_id)
+    ).all():
+        m = INVOICE_NUMBER_RE.match(inv.invoice_number or "")
+        if m:
+            highest = max(highest, int(m.group(1)))
+    return f"INV-{highest + 1}"
 
 
 def list_invoices(
@@ -108,7 +120,7 @@ def create_invoice(
 
     invoice = Invoice(
         policy_id=policy_id,
-        invoice_number=_next_invoice_number(policy_id),
+        invoice_number=_next_invoice_number(db, policy_id),
         status="issued",
         total_amount=round(total, 2),
         paid_amount=0,
@@ -158,7 +170,7 @@ def issue_adjustment_invoice(
     total = round(float(adjustment), 2)
     invoice = Invoice(
         policy_id=policy_id,
-        invoice_number=_next_invoice_number(policy_id) + "-ADJ",
+        invoice_number=_next_invoice_number(db, policy_id) + "-ADJ",
         status="issued",
         total_amount=total,
         paid_amount=0,

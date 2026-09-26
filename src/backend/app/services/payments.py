@@ -92,11 +92,10 @@ def void_payment(db, *, payment_id: int) -> Payment:
     if payment.status != "posted":
         raise ValueError("Only posted payments can be voided")
     payment.status = "void"
-    db.commit()
     invoice = payment.invoice_id is not None and db.get(Invoice, payment.invoice_id)
     if invoice is not None:
         _reconcile(db, invoice)
-        db.commit()
+    db.commit()
     record_log(
         db,
         action="payment_void",

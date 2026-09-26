@@ -229,41 +229,47 @@ def renew(
             f"(current term starts {policy.start_date.isoformat()})"
         )
 
-    # Apply the new premium (or refresh from the current roster) and persist it,
-    # so the policy and any statement reflect the renewed term's cost.
-    if premium is not None:
-        policy.premium = round(float(premium), 2)
-    else:
-        from app.services.premiums import refresh_policy_premium
+    # Apply the new premium (or refresh from the current roster), then bill the
+    # new term and extend the period — all in one transaction. A mid-step
+    # failure (for example a concurrent renewal that left an outstanding
+    # invoice) rolls back the premium change too, so the policy is left exactly
+    # as it was rather than a changed premium with no invoice.
+    try:
+        if premium is not None:
+            policy.premium = round(float(premium), 2)
+        else:
+            from app.services.premiums import refresh_policy_premium
 
-        refresh_policy_premium(db, policy_id=policy_id)
-    db.commit()
-    policy = db.get(Policy, policy_id)
+            refresh_policy_premium(db, policy_id=policy_id)
+        policy = db.get(Policy, policy_id)
 
-    # Bill the new term. create_invoice refreshes the premium again (idempotent)
-    # and snapshots total_amount; it also refuses if an outstanding invoice was
-    # somehow created concurrently, preserving the one-outstanding-invoice rule.
-    outstanding = _outstanding_invoice(db, policy_id=policy_id)
-    if outstanding is not None:
-        raise ValueError(
-            f"A policy can only be renewed when its current term is fully settled; "
-            f"{outstanding.status} invoice {outstanding.invoice_number} is still "
-            f"outstanding"
+        # Bill the new term. create_invoice refreshes the premium again (idempotent)
+        # and snapshots total_amount; it also refuses if an outstanding invoice was
+        # somehow created concurrently, preserving the one-outstanding-invoice rule.
+        outstanding = _outstanding_invoice(db, policy_id=policy_id)
+        if outstanding is not None:
+            raise ValueError(
+                f"A policy can only be renewed when its current term is fully settled; "
+                f"{outstanding.status} invoice {outstanding.invoice_number} is still "
+                f"outstanding"
+            )
+
+        invoice = create_invoice(
+            db,
+            policy_id=policy_id,
+            issued_date=new_start,
+            due_date=(new_end + dt.timedelta(days=due_offset_days)),
+            premium=premium,
         )
+        policy = db.get(Policy, policy_id)
 
-    invoice = create_invoice(
-        db,
-        policy_id=policy_id,
-        issued_date=new_start,
-        due_date=(new_end + dt.timedelta(days=due_offset_days)),
-        premium=premium,
-    )
-    policy = db.get(Policy, policy_id)
-
-    # Extend the period into the new term on the policy row.
-    policy.start_date = new_start
-    policy.end_date = new_end
-    db.commit()
+        # Extend the period into the new term on the policy row.
+        policy.start_date = new_start
+        policy.end_date = new_end
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     record_log(
         db,
