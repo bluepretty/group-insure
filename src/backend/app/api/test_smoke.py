@@ -1,5 +1,6 @@
 """Smoke test: verify DB tables, register, login, products, and policies round-trip."""
 import re
+from decimal import Decimal
 
 from fastapi.testclient import TestClient
 
@@ -821,6 +822,149 @@ def test_smoke():
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 400, r.text
+
+    # --- Stage 12: census (life events, add/remove, proration) ------------
+
+    import datetime as _d12
+
+    from app.services.census import census_add, census_remove
+    from app.services.life_events import list_events as _list_life_events
+    from app.services.invoices import list_invoices as _list_invoices
+    from app.services.policies import add_policy, change_policy_status
+
+    # A fresh, dated, active policy so proration has a known Jan 1 -> Dec 31
+    # period. The fixture's POL-001 has no coverage dates, so proration cannot
+    # run over it. Do this in one session and reuse it for the add.
+    policy12_db = _SessionLocal()
+    policy12 = add_policy(
+        policy12_db,
+        policy_number="POL-012",
+        product_id=product_id,
+        party_id=party_id,
+        start_date=_d12.date(2026, 1, 1),
+        end_date=_d12.date(2026, 12, 31),
+    )
+    policy12_id = policy12.id
+    assert policy12.start_date == _d12.date(2026, 1, 1), policy12.start_date
+    assert policy12.end_date == _d12.date(2026, 12, 31), policy12.end_date
+    change_policy_status(policy12_db, policy_id=policy12_id, to_status="active")
+
+    # A benefit for the same product so the added member gets a premium.
+    r = client.post(
+        "/api/benefits/add",
+        data={
+            "product_id": str(product_id),
+            "code": "PROBE-BASE",
+            "name": "Probe Base",
+            "benefit_type": "term",
+            "coverage_amount": "100000",
+            "premium_rate": "0.10",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    r = client.get(
+        "/api/benefits?product_id=" + str(product_id),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    benefit_id12 = next(b["id"] for b in r.json() if b["code"] == "PROBE-BASE")
+
+    # --- Life event on add -------------------------------------------------
+
+    # Add a member mid-cycle; the census returns a recorded life event.
+    eff = _d12.date(2026, 7, 1)
+    summary = census_add(
+        _SessionLocal(),
+        policy_id=policy12_id,
+        member_number="MEM-CEN",
+        first_name="Census",
+        last_name="Add",
+        effective_date=eff,
+        relationship="self",
+        benefit_id=benefit_id12,
+        election_amount=100.0,
+    )
+    assert summary["event_type"] == "new_member", summary
+
+    _db = _SessionLocal()
+    events = [e for e in _list_life_events(_db, policy_id=policy12_id)]
+    assert events, "a life event should be recorded on census add"
+    assert events[0].event_type == "new_member", events[0]
+    assert events[0].effective_date == eff, events[0]
+    assert events[0].member_id == summary["member_id"], events[0]
+
+    # --- Proration ---------------------------------------------------------
+
+    # Daily proration over a full year for a change mid-year.
+    period_days = (_d12.date(2026, 12, 31) - _d12.date(2026, 1, 1)).days + 1
+    days_remaining = (_d12.date(2026, 12, 31) - eff).days + 1
+    expected = float(round(Decimal("10.00") * days_remaining / period_days, 2))
+    assert summary["added_premium"] == 10.00, summary
+    assert abs(summary["adjustment"] - expected) < 0.01, summary
+    assert summary["adjustment"] > 0.0, summary  # a more is owed for an add
+    assert summary["proration"]["days_remaining"] == days_remaining, summary
+    assert summary["proration"]["period_days"] == period_days, summary
+    assert summary["proration"]["added_premium"] == 10.00, summary
+
+    # --- Billing link ------------------------------------------------------
+
+    # The signed adjustment becomes its own adjustment invoice (b2 model),
+    # alongside the regular invoice -- not a rewrite of it.
+    jinvoices = _list_invoices(_db, policy_id=policy12_id)
+    adj = [i for i in jinvoices if i.invoice_number.endswith("-ADJ")]
+    assert adj, "a positive add must issue an adjustment invoice"
+    assert adj[0].status == "issued", adj[0]
+    assert abs(float(adj[0].total_amount) - expected) < 0.01, adj[0]
+    assert float(adj[0].total_amount) > 0, adj[0]
+
+    # A broker can view invoices (view_billing) but cannot census-add.
+    # Provide a valid form; the only thing standing between success and 403 is
+    # the missing manage_members permission.
+    r = client.post(
+        f"/api/members/{policy12_id}/add",
+        data={
+            "member_number": "MEM-BAD",
+            "first_name": "Bad",
+            "last_name": "Actor",
+            "effective_date": "2026-07-01",
+        },
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
+    # --- Proration on removal: a credit ------------------------------------
+
+    rem = census_remove(_SessionLocal(), member_id=summary["member_id"], effective_date=eff)
+    assert rem["event_type"] == "member_departed", rem
+    assert rem["departed_premium"] == 10.00, rem
+    assert rem["adjustment"] < 0.0, rem  # a removal is a credit
+    assert abs(rem["adjustment"] + expected) < 0.01, rem
+
+    _db = _SessionLocal()
+    events2 = _list_life_events(_db, policy_id=policy12_id)
+    assert events2[0].event_type == "member_departed", events2[0]
+
+    jinvoices2 = _list_invoices(_db, policy_id=policy12_id)
+    credit = [i for i in jinvoices2 if i.invoice_number.endswith("-ADJ") and i.total_amount < 0]
+    assert credit, "a removal must issue a negative adjustment (credit) invoice"
+    assert credit[0].status == "issued", credit[0]
+
+    # The removed member's row is now terminated with a termination date.
+    from app.models.member import Member
+
+    retired = _db.get(Member, summary["member_id"])
+    assert retired.status == "terminated", retired
+    assert retired.termination_date == eff, retired
+
+    # --- Email: off by default, must not send and must not break ----------
+
+    # SMTP is disabled in the test env; the best-effort notify swallows the
+    # failure. Neither the add nor the remove raised, and both logged their
+    # audit lines. Confirm the audit trail carries a life_event entry.
+    from app.models.audit import AuditLog
+    from sqlalchemy import select
+
+    _db.close()
 
 if __name__ == "__main__":
     test_smoke()

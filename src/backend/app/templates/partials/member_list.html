@@ -8,7 +8,7 @@
 
 <div class="card shadow-sm mb-4">
   <div class="card-body">
-    <form hx-post="/api/members/create" hx-target="#content" hx-swap="innerHTML">
+    <form hx-target="#content" hx-swap="innerHTML" id="census-add-form">
       <div class="row g-2 align-items-end">
         <div class="col-sm-2">
           <label class="form-label mb-1 small">Policy</label>
@@ -37,7 +37,23 @@
           <input type="text" class="form-control" name="relationship" placeholder="self/spouse/dependent">
         </div>
         <div class="col-sm-2">
-          <button type="submit" class="btn btn-primary w-100 mt-3">Enroll</button>
+          <label class="form-label mb-1 small">Effective date</label>
+          <input type="date" class="form-control" name="effective_date" value="{{ today.isoformat() if today else '' }}">
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">Benefit</label>
+          <select class="form-select" name="benefit_id">
+            <option value="">— None —</option>
+            {% for benefit in benefits %}
+            <option value="{{ benefit.id }}">{{ benefit.code }}</option>
+            {% else %}
+            <option value disabled>Add a benefit first</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">Election amount</label>
+          <input type="number" step="0.01" class="form-control" name="election_amount" placeholder="annual $">
         </div>
       </div>
     </form>
@@ -66,8 +82,8 @@
         </select>
         <button type="submit" class="btn btn-sm btn-outline-primary">Elect</button>
       </form>
-      <button class="btn btn-sm btn-outline-danger" hx-post="/api/members/{{ member.id }}/terminate" hx-swap="none" hx-on::after-request="if (requestEvent.xhr.status === 200) { location.reload(); }">
-        Terminate
+      <button class="btn btn-sm btn-outline-danger" hx-post="/api/members/{{ member.id }}/remove" hx-swap="none" hx-on::after-request="if (requestEvent.xhr.status === 200) { location.reload(); }">
+        Remove
       </button>
       {% endif %}
     </span>
@@ -76,3 +92,37 @@
   <li class="list-group-item text-muted">No members enrolled yet.</li>
   {% endfor %}
 </ul>
+
+{% if summary %}
+<div class="alert alert-info mt-3 census-summary" role="alert">
+  <strong>Census change recorded:</strong>
+  {{ summary.event_type|replace('new_','') }} on
+  {{ summary.effective_date }} ·
+  {% if summary.adjustment and summary.adjustment != 0 %}
+    policy premium {{ 'increased' if summary.adjustment > 0 else 'decreased' }}
+    by ${'{:,.2f}'.format(summary.adjustment|float)}
+    (prorated over {{ summary.proration.days_remaining }} of {{ summary.proration.period_days }} days)
+  {% else %}
+    no premium adjustment
+  {% endif %}
+  {% if summary.invoice_number %}· Adjustment invoice {{ summary.invoice_number }}{% endif %}.
+</div>
+{% endif %}
+
+<script>
+  // Census add posts to /api/members/{policy_id}/add, so the target path
+  // follows the selected policy. Point the form there on any change.
+  (function () {
+    var form = document.getElementById("census-add-form");
+    if (!form) return;
+    var policySelect = form.querySelector("select[name='policy_id']");
+    function refresh() {
+      var pid = policySelect ? policySelect.value : "";
+      form.setAttribute("hx-post", "/api/members/" + pid + "/add");
+    }
+    if (policySelect) {
+      policySelect.addEventListener("change", refresh);
+      refresh();
+    }
+  })();
+</script>

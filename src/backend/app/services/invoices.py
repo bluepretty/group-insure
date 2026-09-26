@@ -118,3 +118,54 @@ def create_invoice(
         details=f"policy_id={policy_id} amount={invoice.total_amount}",
     )
     return invoice
+
+
+def issue_adjustment_invoice(
+    db,
+    *,
+    policy_id: int,
+    adjustment: float,
+    effective_date: dt.date | None = None,
+    reason: str | None = None,
+    issued_date: dt.date | None = None,
+    due_date: dt.date | None = None,
+) -> Invoice:
+    """Issue a *separate* adjustment invoice for a signed mid-term delta.
+
+    Used by the census proration (Stage 12) to reflect the signed difference an
+    add or removal causes to the premium for the *remaining* policy period. A
+    positive ``adjustment`` is more owed; a negative one is a credit.
+
+    This deliberately does **not** go through ``create_invoice``'s one-outstanding-
+    invoice-per-policy guard: an adjustment invoice is a distinct ledger line that
+    sits *alongside* the policy's regular invoice rather than replacing it.
+
+    ``total_amount`` stores the signed adjustment; ``adjustment_reason`` explains
+    it on the ledger. Reuses ``_reconcile_invoice`` so payments update
+    ``paid_amount``/``status`` normally.
+    """
+    policy = db.get(Policy, policy_id)
+    if policy is None:
+        raise ValueError(f"Unknown policy_id: {policy_id}")
+
+    total = round(float(adjustment), 2)
+    invoice = Invoice(
+        policy_id=policy_id,
+        invoice_number=_next_invoice_number(policy_id) + "-ADJ",
+        status="issued",
+        total_amount=total,
+        paid_amount=0,
+        issued_date=issued_date or effective_date or dt.date.today(),
+        due_date=due_date,
+        adjustment_reason=reason,
+    )
+    db.add(invoice)
+    db.commit()
+    record_log(
+        db,
+        action="invoice_issued",
+        entity="Invoice",
+        entity_id=invoice.id,
+        details=f"policy_id={policy_id} adjustment={total} reason={reason}",
+    )
+    return invoice

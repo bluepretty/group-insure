@@ -85,3 +85,13 @@ body {
     margin: 0.75in;
   }
 }
+
+/* Stage 12: mid-term census change summary shown after an add/remove. */
+.census-summary {
+  white-space: normal;
+  line-height: 1.5;
+}
+
+.census-summary strong {
+  margin-right: 0.25em;
+}

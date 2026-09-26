@@ -11,6 +11,7 @@ from app.models.user import User
 from app.models.invoice import Invoice
 from app.models.payment import Payment
 from app.models.claim import Claim
+from app.models.life_event import LifeEvent
 
 __all__ = [
     "AuditLog",
@@ -25,4 +26,5 @@ __all__ = [
     "Invoice",
     "Payment",
     "Claim",
+    "LifeEvent",
 ]

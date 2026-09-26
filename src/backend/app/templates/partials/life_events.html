@@ -1,0 +1,44 @@
+{# Mid-term life-event log (Stage 12). Rendered by GET /api/members/life-events
+   so the member-list page can surface the "why/when" trail of census changes. #}
+{% if events %}
+<div class="card shadow-sm mt-3">
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0 align-middle">
+      <thead>
+        <tr>
+          <th class="small text-muted">When changed</th>
+          <th class="small text-muted">Event</th>
+          <th class="small text-muted">Member</th>
+          <th class="small text-muted">Recorded</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in events %}
+        <tr>
+          <td>{{ e.effective_date.isoformat() if e.effective_date else '—' }}</td>
+          <td>
+            <span class="badge bg-light text-dark border">
+              {{ e.event_type.replace('_', ' ') }}
+            </span>
+          </td>
+          <td>
+            {% if e.member_id %}
+              <a href="#/members/{{ e.member_id }}">{{ e.member_id }}</a>
+            {% else %}
+              <span class="text-muted">policy-level</span>
+            {% endif %}
+            {% if e.details %}<div class="small text-muted">{{ e.details }}</div>{% endif %}
+          </td>
+          <td class="small text-muted">
+            {% if e.actor_id %}by {{ e.actor_id }}{% endif %}
+            {{ e.created_at.isoformat() if e.created_at else '—' }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="small text-muted mt-3">No life events recorded yet.</div>
+{% endif %}

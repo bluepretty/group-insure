@@ -29,6 +29,10 @@ class Invoice(Base):
     paid_date: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Mid-term census adjustment (Stage 12): a short reason explaining why this
+    # invoice is a signed proration delta rather than a regular premium invoice.
+    # NULL for ordinary invoices.
+    adjustment_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: dt.datetime.now(dt.timezone.utc)
     )

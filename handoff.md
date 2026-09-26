@@ -216,6 +216,63 @@ Run **from `src/backend`** (templates/static are resolved relative to there). Th
   body) and the broker can view (`view_billing`) but the send is `403` (needs
   `manage_billing`); `.pdf` returns `application/pdf` with `%PDF` magic; confirm-
   send with SMTP disabled → `400` (no `sent`); unknown policy → `400`. **1 passed.**
+
+## Stage 12 (Mid-Term Census: Life Events, Add/Remove, Proration) — complete, committed
+- Spec: `.claude/plan-stage12.md`. A group policy is a living roster: members join
+  and leave mid-cycle, and the policy premium is a live sum of member premiums. Before
+  this stage there was **no way to model mid-term changes** — `enroll_member` was a
+  one-time initial enrollment, nothing tracked *why/when* coverage changed, and the
+  once-per-period invoice never accounted for a mid-year add/remove.
+- **Billing fork (resolved as b2):** the original invoice stands; a census change issues
+  a **separate signed adjustment invoice** for the delta, exempt from the one-outstanding-
+  invoice-per-policy invariant. `adjustment > 0` (add) → a normal invoice (more owed);
+  `adjustment < 0` (removal) → a negative credit invoice. An outstanding invoice is not
+  reissued — the delta is a second line.
+- Proration basis — **daily proration over the policy period**:
+  `adjustment = annual_premium × (days_remaining / period_days)`, both counts inclusive of
+  the effective date; signed + for an add, − for a removal. Single `prorate_policy` in
+  `services/proration.py` so the basis stays swappable.
+- Part 0 (model + log): `models/life_event.py` — `LifeEvent` table (`id, policy_id,
+  member_id nullable, event_type, effective_date, actor_id nullable, details, created_at`);
+  `event_type` constrained to `new_member/new_dependent/member_departed/dependent_departed`
+  at the service layer. `services/life_events.py` — `record_event(db, *, policy_id,
+  member_id, event_type, effective_date, actor_id, details)` inserts the row and mirrors an
+  audit line (`action="life_event"`); `list_events(db, *, policy_id, event_type)`.
+- Part 1 (add): `services/census.py::census_add` — enrolls mid-cycle (via `enroll_member` +
+  optional `elect_benefit`), records a `new_member`/`new_dependent` life event, recomputes
+  and persists the policy premium, prorates the delta, and issues an adjustment invoice.
+  `api/members.py::member_add` (`POST /api/members/{policy_id}/add`, `manage_members`) —
+  Form endpoint; returns the member-list partial + a summary (event, effective date,
+  proration counts, signed adjustment, adjustment invoice number).
+- Part 2 (remove): `census_remove` — terminates the member, sets `termination_date`,
+  records a `member_departed`/`dependent_departed` event, credits the prorated departure,
+  and issues a negative adjustment invoice. `api/members.py::member_remove` (`POST
+  /api/members/{member_id}/remove`, `manage_members`) mirrors the existing `/terminate`
+  endpoint.
+- Part 4 (billing link): `services/invoices.py::issue_adjustment_invoice` snapshots the
+  signed adjustment (`total_amount` = signed delta, `adjustment_reason` carries the reason);
+  a new nullable `adjustment_reason` column on `Invoice` (`models/invoice.py`). The add/remove
+  endpoints call `prorate_policy` + `issue_adjustment_invoice` in one transaction.
+- Part 5 (notifications): every census change fires a `record_log` audit line (`member_enrolled`
+  / `member_terminated`) and an **optional** email to the policyholder's stored, validated
+  email (`services/emails.py::notify_census_change`) gated on `smtp_enabled`; best-effort,
+  never raises, never in the test path.
+- Frontend: `templates/partials/member_list.html` — census add form (policy / first / last /
+  member-number / relationship / effective-date / benefit / election-amount) posts to
+  `/api/members/{policy_id}/add`; per-member **Remove** button to `/remove`; a live-change
+  summary alert shows event, effective date, premium increase/decrease, proration day counts,
+  and the adjustment invoice number. `templates/partials/life_events.html` (new) — the durable
+  "why/when" log table rendered by `api/life_events.py::life_events`
+  (`GET /api/members/life-events?policy_id=`, `view_members`).
+- Smoke test: `api/test_smoke.py` added a Stage 12 block — over a dated Jan 1 → Dec 31
+  fixture policy, an add on Jul 1 records a `new_member` life event and issues a positive
+  adjustment invoice whose value is within rounding of `annual × remaining/period`; a removal
+  credits a negative adjustment; the departed member is `terminated` with `termination_date`;
+  the adjustment invoice exists with the signed `total_amount`; census add/remove is `403`
+  without `manage_members`; SMTP off logs audit + does not send. **1 passed.**
+- Security: professional accounts only (underwriter); census add/remove gated on
+  `manage_members`; the adjustment/billing effect is visible to `view_billing`. JWT secret in
+  `.env` (gitignored at repo root line 24).
 - Security: professional accounts only (underwriter/broker); JWT secret in `.env`
   (gitignored at repo root line 24); `.env` never committed. `reportlab` is a
   hard runtime dependency now (was previously working in the venv without the

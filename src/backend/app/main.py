@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.api import auth, audit, benefits, billing, claims, members, pages, parties, policies, premiums, products, reports, statements
+from app.api import auth, audit, benefits, billing, claims, life_events, members, pages, parties, policies, premiums, products, reports, statements
 from app.core.database import engine, Base
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -34,6 +34,7 @@ app.include_router(billing.router)
 app.include_router(claims.router)
 app.include_router(members.router)
 app.include_router(audit.router)
+app.include_router(life_events.router)
 app.include_router(pages.router)
 app.include_router(reports.router)
 app.include_router(statements.router)
