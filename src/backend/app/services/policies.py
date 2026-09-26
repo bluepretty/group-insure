@@ -173,3 +173,113 @@ def close_policy(db, *, policy_id: int, today: dt.date | None = None) -> Policy:
         details=f"lapsed_days={lapsed_days}",
     )
     return db.get(Policy, policy_id)
+
+
+def renew(
+    db,
+    *,
+    policy_id: int,
+    new_start: dt.date,
+    new_end: dt.date,
+    premium: float | None = None,
+    due_offset_days: int = 30,
+) -> dict:
+    """Renew a settled, active policy into a new term.
+
+    Renewal extends a policy past its ``end_date`` and bills the next term. It is
+    only valid for an **active** policy that has been fully settled for its
+    current term (no outstanding invoice): that keeps the one-outstanding-
+    invoice-per-policy invariant that :func:`create_invoice` enforces.
+
+    ``new_start`` must be the day after the current ``end_date`` (continuity of
+    coverage); ``new_end`` must be strictly later and must not overlap the
+    current term. The period is rewritten to ``new_start -> new_end``. When
+    ``premium`` is given it is applied, otherwise the premium is refreshed from
+    the current roster (the same path ``create_invoice`` uses). Issues the
+    next-term invoice with a due date of ``new_end + due_offset_days`` and logs
+    ``policy_renewed``. Returns a summary dict.
+    """
+    from app.services.invoices import _outstanding_invoice, create_invoice
+
+    if new_end <= new_start:
+        raise ValueError(
+            f"Renewal end_date ({new_end.isoformat()}) must be later than its "
+            f"start_date ({new_start.isoformat()})"
+        )
+
+    policy = db.get(Policy, policy_id)
+    if policy is None:
+        raise ValueError(f"Unknown policy_id: {policy_id}")
+    if policy.status != "active":
+        raise ValueError(f"Only an active policy can be renewed (is '{policy.status}')")
+    if policy.start_date is None or policy.end_date is None:
+        raise ValueError(
+            "Policy must have coverage dates (start_date and end_date) to renew"
+        )
+
+    expected_start = policy.end_date + dt.timedelta(days=1)
+    if new_start != expected_start:
+        raise ValueError(
+            f"Renewal must start the day after the current term ends "
+            f"(expected {expected_start.isoformat()}, got {new_start.isoformat()})"
+        )
+    if new_start <= policy.start_date:
+        raise ValueError(
+            f"Renewal must not overlap the current term "
+            f"(current term starts {policy.start_date.isoformat()})"
+        )
+
+    # Apply the new premium (or refresh from the current roster) and persist it,
+    # so the policy and any statement reflect the renewed term's cost.
+    if premium is not None:
+        policy.premium = round(float(premium), 2)
+    else:
+        from app.services.premiums import refresh_policy_premium
+
+        refresh_policy_premium(db, policy_id=policy_id)
+    db.commit()
+    policy = db.get(Policy, policy_id)
+
+    # Bill the new term. create_invoice refreshes the premium again (idempotent)
+    # and snapshots total_amount; it also refuses if an outstanding invoice was
+    # somehow created concurrently, preserving the one-outstanding-invoice rule.
+    outstanding = _outstanding_invoice(db, policy_id=policy_id)
+    if outstanding is not None:
+        raise ValueError(
+            f"A policy can only be renewed when its current term is fully settled; "
+            f"{outstanding.status} invoice {outstanding.invoice_number} is still "
+            f"outstanding"
+        )
+
+    invoice = create_invoice(
+        db,
+        policy_id=policy_id,
+        issued_date=new_start,
+        due_date=(new_end + dt.timedelta(days=due_offset_days)),
+        premium=premium,
+    )
+    policy = db.get(Policy, policy_id)
+
+    # Extend the period into the new term on the policy row.
+    policy.start_date = new_start
+    policy.end_date = new_end
+    db.commit()
+
+    record_log(
+        db,
+        action="policy_renewed",
+        entity="Policy",
+        entity_id=policy_id,
+        details=(
+            f"term={policy.start_date.isoformat()}..{policy.end_date.isoformat()} "
+            f"new_premium={policy.premium} invoice={invoice.invoice_number}"
+        ),
+    )
+    return {
+        "policy_id": policy_id,
+        "new_start": policy.start_date.isoformat(),
+        "new_end": policy.end_date.isoformat(),
+        "premium": float(policy.premium or 0.0),
+        "invoice_number": invoice.invoice_number,
+        "invoice_total": float(invoice.total_amount),
+    }

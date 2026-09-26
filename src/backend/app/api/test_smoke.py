@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 
 from app.core.database import engine, SessionLocal, Base
 from app.main import app
+from app.models.invoice import Invoice
+from app.models.policy import Policy
 from app.models.user import User
 
 
@@ -965,6 +967,174 @@ def test_smoke():
     from sqlalchemy import select
 
     _db.close()
+
+    # --- Stage 13: policy renewal ------------------------------------------
+
+    import datetime as _d13
+
+    from app.services.invoices import create_invoice as _issue_invoice
+    from app.services.payments import record_payment as _record_payment
+
+    # Renewal only works on an active, fully-settled policy (no outstanding
+    # invoice anywhere). Use a fresh, dated, active policy with a roster member
+    # elected into a benefit (premium = election_amount × premium_rate), then
+    # pay its term in full so it is settled. We enroll the member directly
+    # (not via census_add, which issues a -ADJ invoice) to keep the policy
+    # fully settled before renewal.
+    policy13_db = _SessionLocal()
+    policy13 = add_policy(
+        policy13_db,
+        policy_number="POL-013",
+        product_id=product_id,
+        party_id=party_id,
+        start_date=_d13.date(2026, 1, 1),
+        end_date=_d13.date(2026, 12, 31),
+    )
+    policy13_id = policy13.id
+    change_policy_status(policy13_db, policy_id=policy13_id, to_status="active")
+
+    # Create a benefit on the product and elect a member into it.
+    r = client.post(
+        "/api/benefits/add",
+        data={
+            "product_id": str(product_id),
+            "code": "PROBE-BASE",
+            "name": "Probe Base",
+            "benefit_type": "term",
+            "coverage_amount": "100000",
+            "premium_rate": "0.10",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    r = client.get(
+        "/api/benefits?product_id=" + str(product_id),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    benefit_id13 = next(b["id"] for b in r.json() if b["code"] == "PROBE-BASE")
+
+    from app.services.members import enroll_member
+    from app.services.benefits import elect_benefit
+
+    member13 = enroll_member(
+        policy13_db,
+        policy_id=policy13_id,
+        party_id=party_id,
+        member_number="MEM-REN",
+        first_name="Renew",
+        last_name="Me",
+        effective_date=_d13.date(2026, 1, 1),
+    )
+    election13 = elect_benefit(
+        policy13_db, member_id=member13.id, benefit_id=benefit_id13, election_amount=100.0
+    )
+    roster_premium = float(election13.premium or 0)
+    assert roster_premium == 10.00, election13  # 100 * 0.10
+    policy13_db.close()
+
+    # Issue the term-1 invoice (billed from the roster premium) and pay it in
+    # full so the policy is settled.
+    _db = _SessionLocal()
+    inv = _issue_invoice(_db, policy_id=policy13_id)
+    assert inv.status == "issued", inv
+    assert inv.total_amount is not None
+    assert float(inv.total_amount) == roster_premium, inv
+    amount_to_pay = float(inv.total_amount)
+    _record_payment(_db, invoice_id=inv.id, amount=amount_to_pay)
+    settled = _db.get(Invoice, inv.id)
+    assert settled.status == "paid", settled
+
+    # The policy is active and fully settled.
+    renewed_policy = _db.get(Policy, policy13_id)
+    assert renewed_policy.status == "active", renewed_policy
+    _db.close()
+
+    # Renew into a 2027 term at an explicit premium. Must start the day after
+    # the current term ends (2027-01-01) and be later than it.
+    r = client.post(
+        f"/api/policies/{policy13_id}/renew",
+        data={
+            "new_start": "2027-01-01",
+            "new_end": "2027-12-31",
+            "premium": "12000.00",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    resp = r.json()
+    assert resp["new_start"] == "2027-01-01", resp
+    assert resp["new_end"] == "2027-12-31", resp
+    assert float(resp["invoice_total"]) == 12000.00, resp
+    assert resp["invoice_number"].startswith("INV"), resp
+    assert resp["premium"] == 12000.00, resp
+
+    # The period is rewritten to the new term; the policy stays active.
+    _db = _SessionLocal()
+    renewed = _db.get(Policy, policy13_id)
+    assert renewed.start_date == _d13.date(2027, 1, 1), renewed
+    assert renewed.end_date == _d13.date(2027, 12, 31), renewed
+    assert renewed.status == "active", renewed
+    new_inv = next(i for i in _list_invoices(_db, policy_id=policy13_id)
+                   if i.invoice_number == resp["invoice_number"])
+    assert new_inv.status == "issued", new_inv
+    assert float(new_inv.total_amount) == 12000.00, new_inv
+
+    # The renewal logged a policy_renewed audit line carrying the invoice number.
+    renewal_lines = [a for a in _db.scalars(select(AuditLog)).all()
+                     if a.action == "policy_renewed"]
+    assert renewal_lines, "a policy_renewed audit line should exist"
+    assert resp["invoice_number"] in renewal_lines[-1].details, renewal_lines[-1]
+    _db.close()
+
+    # Renewing an unsettled (unpaid) policy is refused: the one-outstanding-
+    # invoice-per-policy invariant is preserved. After the 2027 renewal above
+    # that invoice is unpaid, so a further renewal is refused.
+    r = client.post(
+        f"/api/policies/{policy13_id}/renew",
+        data={
+            "new_start": "2028-01-01",
+            "new_end": "2028-12-31",
+            "premium": "",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
+    # A bad term is refused: new_start must be the day after the current end.
+    r = client.post(
+        f"/api/policies/{policy13_id}/renew",
+        data={
+            "new_start": "2027-06-01",
+            "new_end": "2027-12-31",
+            "premium": "",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
+    # new_end must be later than new_start.
+    r = client.post(
+        f"/api/policies/{policy13_id}/renew",
+        data={
+            "new_start": "2028-01-01",
+            "new_end": "2028-01-01",
+            "premium": "",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
+    # A broker (no manage_policies) cannot renew.
+    r = client.post(
+        f"/api/policies/{policy13_id}/renew",
+        data={
+            "new_start": "2027-01-01",
+            "new_end": "2027-12-31",
+            "premium": "",
+        },
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
 
 if __name__ == "__main__":
     test_smoke()

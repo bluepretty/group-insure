@@ -75,15 +75,22 @@ def create_invoice(
     policy_id: int,
     issued_date: dt.date | None = None,
     due_date: dt.date | None = None,
+    premium: float | None = None,
 ) -> Invoice:
     policy = db.get(Policy, policy_id)
     if policy is None:
         raise ValueError(f"Unknown policy_id: {policy_id}")
 
-    try:
-        refresh_policy_premium(db, policy_id=policy_id)
-    except ValueError:
-        raise
+    # A caller may supply an explicit premium (e.g. renew at a new annual
+    # rate). Otherwise the premium is refreshed from the roster, the default
+    # snapshot the invoice service uses.
+    if premium is not None:
+        policy.premium = round(float(premium), 2)
+    else:
+        try:
+            refresh_policy_premium(db, policy_id=policy_id)
+        except ValueError:
+            raise
     policy = db.get(Policy, policy_id)
     total = float(policy.premium)
 

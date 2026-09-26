@@ -277,3 +277,39 @@ Run **from `src/backend`** (templates/static are resolved relative to there). Th
   (gitignored at repo root line 24); `.env` never committed. `reportlab` is a
   hard runtime dependency now (was previously working in the venv without the
   pyproject entry).
+
+## Stage 13 (Policy Renewal: extending a policy term) — complete, committed
+- Spec: `.claude/plan-stage13.md`. Complements the Stage 9 lifecycle. Stage 9 added
+  the *downward* transitions (lapse, reinstatement, close) but left **no way to
+  extend** a healthy policy past its `end_date` — `close` was the only move once a
+  policy outlived its term. Stage 13 adds **renewal**: rewrite `start_date`/`end_date`
+  into a new term and bill the next term.
+- **Billing fork (resolved as (b2)):** a renewal issues a fresh invoice for the new
+  term via `create_invoice`. This stage keeps the one-outstanding-invoice-per-policy
+  invariant: a renewal is only allowed when the policy is **active AND fully settled**
+  (no unpaid invoice anywhere). `create_invoice` refuses to issue while an outstanding
+  invoice exists. The proration path (Stage 12) is untouched — the `-ADJ` adjustment
+  invoice remains its own invariant-exempt line.
+- `services/invoices.py::create_invoice` gains an optional `premium` param: when set,
+  it snapshots that premium directly instead of refreshing from the roster, so a
+  renewal can bill a new annual rate rather than the current one.
+- `services/policies.py::renew(db, *, policy_id, new_start, new_end, premium=None,
+  due_offset_days=30)` — only an active, dated, fully-settled policy qualifies; raises
+  `ValueError` if `new_end <= new_start`, if `new_start != end_date + 1 day`, if the
+  term would overlap the current one, or if an outstanding invoice exists. Rewrites the
+  period, bills the term (`due = new_end + due_offset_days`), logs `policy_renewed`, and
+  returns the summary dict.
+- **API:** `POST /api/policies/{id}/renew` (`api/policies.py::policy_renew`) — a Form
+  endpoint under `manage_policies` (`new_start`, `new_end`, optional `premium`). Returns
+  the renewal summary on `200`, `400` JSON on `ValueError`. Mirrors `policy_close`.
+- **Frontend:** `templates/partials/policy_list.html` — a **Renew** button (shown for
+  active, fully-settled policies) toggles an inline form with the new term; JS pre-fills
+  the start date with the day after the current `end_date` and the end date one year out.
+- Smoke test: `api/test_smoke.py` added a Stage 13 block — over a fresh dated policy with
+  a roster member elected into a benefit, pay the term, renew into the next year at an
+  explicit premium → `200` with the new period and billed premium; paying the new term
+  enables a second renewal; an unpaid term refuses a further renewal (`400`); a
+  mis-dated term (`new_start` not `end_date + 1 day`, or `new_end <= new_start`) `400`s;
+  a broker (no `manage_policies`) is `403`. **1 passed.**
+- Security: professional accounts only (underwriter/broker); renew gated on
+  `manage_policies`. JWT secret in `.env` (gitignored at repo root line 24).

@@ -149,3 +149,31 @@ def policy_close(
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
     return JSONResponse(content={"policy_id": policy_id, "status": policy.status})
+
+
+@router.post("/{policy_id}/renew")
+def policy_renew(
+    policy_id: int,
+    new_start: str = Form(...),
+    new_end: str = Form(...),
+    premium: str = Form(""),
+    db: Session = Depends(get_db),
+    _: None = Depends(require_role("manage_policies")),
+) -> JSONResponse:
+    import datetime as _dt
+
+    from app.services.policies import renew
+
+    try:
+        result = renew(
+            db,
+            policy_id=policy_id,
+            new_start=_dt.date.fromisoformat(new_start),
+            new_end=_dt.date.fromisoformat(new_end),
+            premium=float(premium) if premium else None,
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    except Exception as exc:  # preserve the same 400 contract for any failure
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    return JSONResponse(content=result)

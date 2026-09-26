@@ -74,6 +74,60 @@
         title="Close the policy once it has been lapsed for the grace period"
       >Close</a>
       {% elif can_manage and policy.status == 'active' %}
+      {% if not outstanding[policy.id] %}
+      <!-- Renew: extend the term and bill the next year. Toggle the inline form. -->
+      <a
+        href="#"
+        class="btn btn-sm btn-outline-primary"
+        hx-swap="none"
+        hx-on::after-request="var f=document.getElementById('renew-form-{{ policy.id }}'); if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';"
+        title="Renew this policy for a new term"
+      >Renew</a>
+      <form
+        id="renew-form-{{ policy.id }}"
+        class="mt-2"
+        hx-post="/api/policies/{{ policy.id }}/renew"
+        hx-target="#content"
+        hx-swap="innerHTML"
+        hx-on::after-request="if (requestEvent.xhr.status === 200) { location.reload(); }"
+        style="display:none;"
+      >
+        <div class="row g-2 align-items-end">
+          <div class="col">
+            <label class="form-label mb-1 small">New term start</label>
+            <input type="date" class="form-control form-control-sm" name="new_start"
+                   data-default="{{ policy.end_date.isoformat() if policy.end_date else '' }}">
+          </div>
+          <div class="col">
+            <label class="form-label mb-1 small">New term end</label>
+            <input type="date" class="form-control form-control-sm" name="new_end">
+          </div>
+          <div class="col">
+            <label class="form-label mb-1 small">Premium (optional)</label>
+            <input type="number" step="0.01" class="form-control form-control-sm" name="premium" placeholder="recompute if blank">
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-sm btn-primary">Renew</button>
+          </div>
+        </div>
+      </form>
+      <script>
+        // Default the new-term start to the day after the current end date.
+        (function () {
+          var input = document.getElementById("renew-form-{{ policy.id }}")
+              .querySelector('input[name="new_start"]');
+          if (!input || !input.dataset.default) return;
+          var d = new Date(input.dataset.default);
+          d.setDate(d.getDate() + 1);
+          var iso = d.toISOString().split("T")[0];
+          input.value = iso;
+          var end = document.querySelector('#renew-form-{{ policy.id }} input[name="new_end"]');
+          if (end && !end.value) end.value = iso;
+        })();
+      </script>
+      {% else %}
+      <span class="small text-muted" title="Renew is available once the current term is fully paid">Renew after payment</span>
+      {% endif %}
       <a
         href="#"
         class="btn btn-sm btn-outline-warning"
