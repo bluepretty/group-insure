@@ -25,6 +25,7 @@ Development is broken into stages. Each phase has an authoritative plan in
 7. **Claims** — done (raise/adjudicate/close claims via a small state machine, `view_claims`/`manage_claims`, `claude/plan-stage7.md`)
 8. **Reports** — done (cross-domain platform snapshot via `build_report`, `GET /api/reports` + `/api/reports/list`, wires the dashboard Reports nav link and populates the four overview stat cards, `view_dashboard` gate)
 9. **Policy lapse** — done (billing drives policy lifecycle: unpaid invoice past `due_date` lapses an active policy, full payment reinstates it, reissue while lapsed re-activates; `GET /api/policies/{id}/lapse-check`, `manage_policies` gate)
+10. **Policy statement** — done (HTML preview + `GET /api/policies/{id}/statement.pdf`, `window.print()` preview with print CSS, and confirm-gated email of the PDF to the policyholder's stored, validated email; SMTP disabled by default so the send path 400s in dev. Single email-validation source of truth (`validators.validate_email`) applied on Party/Organization/User entry — a malformed address 400s.)
 
 ## Project layout
 

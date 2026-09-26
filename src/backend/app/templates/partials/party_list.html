@@ -6,7 +6,7 @@
   <div class="card-body">
     <form hx-post="/api/parties/create" hx-target="#content" hx-swap="innerHTML">
       <div class="row g-2 align-items-end">
-        <div class="col-sm-5">
+        <div class="col-sm-4">
           <label class="form-label mb-1 small">Name</label>
           <input type="text" class="form-control" name="name" required>
         </div>
@@ -16,6 +16,10 @@
             <option value="policyholder">Policyholder</option>
             <option value="broker">Broker</option>
           </select>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label mb-1 small">Email</label>
+          <input type="email" class="form-control" name="email" placeholder="optional">
         </div>
         <div class="col-sm-2">
           <button type="submit" class="btn btn-primary w-100">Add</button>

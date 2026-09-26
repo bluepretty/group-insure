@@ -59,6 +59,10 @@ def policy_list(
             "invoices": invoices,
             "outstanding": outstanding,
             "can_manage": _has_permission(user, "manage_policies"),
+            # Anyone who can view billing can preview/download a statement;
+            # only underwriters (manage_billing) can email one out.
+            "can_view_statement": _has_permission(user, "view_billing"),
+            "can_send_statement": _has_permission(user, "manage_billing"),
         },
     )
 

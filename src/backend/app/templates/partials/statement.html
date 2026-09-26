@@ -1,0 +1,99 @@
+{% set s = statement %}
+<div class="statement">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Policy Statement: {{ s.policy_number }}</h2>
+    <span class="badge bg-secondary rounded-pill">{{ s.status }}</span>
+  </div>
+
+  {% if can_send %}
+  <div class="d-flex gap-2 mb-3">
+    <button type="button" class="btn btn-sm btn-outline-primary" onclick="window.print()">
+      <i class="bi bi-printer"></i> Print…
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="send-statement"
+            data-policy-id="{{ s.policy_number }}" data-email="{{ s.policyholder_email or '—' }}">
+      <i class="bi bi-envelope"></i> Email statement…
+    </button>
+  </div>
+  {% else %}
+  <div class="mb-3">
+    <button type="button" class="btn btn-sm btn-outline-primary" onclick="window.print()">
+      <i class="bi bi-printer"></i> Print…
+    </button>
+  </div>
+  {% endif %}
+
+  <p class="text-muted small">Generated {{ s.as_of }}.</p>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-body p-3">
+          <h3 class="h6 text-uppercase text-muted mb-2">Policy</h3>
+          <dl class="row mb-0 small">
+            <dt class="col-sm-5">Product</dt>
+            <dd class="col-sm-7">{{ s.product_name }}</dd>
+            <dt class="col-sm-5">Term</dt>
+            <dd class="col-sm-7">{{ s.start_date }} – {{ s.end_date }}</dd>
+            <dt class="col-sm-5">Annual premium</dt>
+            <dd class="col-sm-7">{{ "%.2f"|format(s.premium) }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-body p-3">
+          <h3 class="h6 text-uppercase text-muted mb-2">Policyholder</h3>
+          <dl class="row mb-0 small">
+            <dt class="col-sm-5">Name</dt>
+            <dd class="col-sm-7">{{ s.policyholder_name }}</dd>
+            <dt class="col-sm-5">Email</dt>
+            <dd class="col-sm-7">{{ s.policyholder_email or '—' }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="h6 text-uppercase text-muted my-3">Invoices</h3>
+  <table class="table table-sm table-aligned mb-0">
+    <thead>
+      <tr>
+        <th>Invoice</th>
+        <th>Issued</th>
+        <th>Due</th>
+        <th class="text-end">Billed</th>
+        <th class="text-end">Paid</th>
+        <th class="text-end">Balance</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for inv in s.invoices %}
+      <tr>
+        <td>{{ inv.invoice_number }}</td>
+        <td>{{ inv.issued_date.strftime('%Y-%m-%d') if inv.issued_date else '—' }}</td>
+        <td>{{ inv.due_date.strftime('%Y-%m-%d') if inv.due_date else '—' }}</td>
+        <td class="text-end">${{ "%.2f"|format(inv.total_amount) }}</td>
+        <td class="text-end">${{ "%.2f"|format(inv.paid_amount) }}</td>
+        <td class="text-end">${{ "%.2f"|format(inv.balance) }}</td>
+        <td><span class="badge bg-secondary rounded-pill">{{ inv.status }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-muted small">No invoices have been issued.</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="fw-bold">
+        <th>Total</th>
+        <th></th>
+        <th></th>
+        <th class="text-end">${{ "%.2f"|format(s.total_invoiced) }}</th>
+        <th class="text-end">${{ "%.2f"|format(s.total_paid) }}</th>
+        <th class="text-end">${{ "%.2f"|format(s.balance_outstanding) }}</th>
+        <th></th>
+      </tr>
+    </tfoot>
+  </table>
+</div>

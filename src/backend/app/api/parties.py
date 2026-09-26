@@ -1,6 +1,6 @@
 """Party CRUD endpoints and HTMX partials."""
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ router = APIRouter(prefix="/api/parties", tags=["parties"])
 class PartyModel(BaseModel):
     name: str
     party_type: str
+    email: str | None = None
     broker_id: int | None = None
     organization_id: int | None = None
 
@@ -33,13 +34,17 @@ def create_party(
     db: Session = Depends(get_db),
     _: None = Depends(require_role("manage_parties")),
 ) -> dict:
-    party = add_party(
-        db,
-        name=payload.name,
-        party_type=payload.party_type,
-        broker_id=payload.broker_id,
-        organization_id=payload.organization_id,
-    )
+    try:
+        party = add_party(
+            db,
+            name=payload.name,
+            party_type=payload.party_type,
+            email=payload.email,
+            broker_id=payload.broker_id,
+            organization_id=payload.organization_id,
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
     return {"id": party.id, "name": party.name}
 
 
@@ -58,10 +63,14 @@ def party_create(
     request: Request,
     name: str = Form(...),
     party_type: str = Form(...),
+    email: str | None = Form(None),
     db: Session = Depends(get_db),
     _: None = Depends(require_role("manage_parties")),
 ) -> HTMLResponse:
-    add_party(db, name=name, party_type=party_type)
+    try:
+        party = add_party(db, name=name, party_type=party_type, email=email)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
     return templates.TemplateResponse(
         request,
         "partials/party_list.html",

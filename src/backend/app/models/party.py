@@ -18,6 +18,11 @@ class Party(Base):
     name: Mapped[str] = mapped_column(String(200))
     # "policyholder" | "broker"
     party_type: Mapped[str] = mapped_column(String(50))
+    # Email is a first-class, optional field on every external record: any
+    # present value is validated (validators.validate_email), but absence is
+    # always allowed. Nullable on purpose so existing records and the smoke DB
+    # are unaffected.
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     active: Mapped[bool] = mapped_column(default=True)
     organization_id: Mapped[int | None] = mapped_column(
         ForeignKey("organizations.id"), nullable=True

@@ -44,3 +44,44 @@ body {
 .card-title {
   font-weight: 600;
 }
+
+/* --- Statement printing -------------------------------------------------- */
+/*
+ * The statement partial renders inline in the app for on-screen review, but the
+ * print stylesheet is what actually reaches the printer/PDF exporter. It hides
+ * app chrome (sidebar, toolbar, action buttons) and keeps only the statement
+ * body — so `window.print()` produces a clean, page-sized reconciliation
+ * document regardless of what else is on screen.
+ */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  /* Reveal only the statement node and every descendant, then reposition it to
+     the top of the (single) printed page. */
+  .statement,
+  .statement * {
+    visibility: visible;
+  }
+
+  .statement {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  .no-print,
+  .sidebar,
+  .toolbar,
+  .navbar,
+  button,
+  a.btn {
+    display: none !important;
+  }
+
+  @page {
+    margin: 0.75in;
+  }
+}

@@ -84,6 +84,33 @@
         title="Lapse if this policy has an overdue unpaid invoice"
       >Lapse</a>
       {% endif %}
+      {% if can_view_statement %}
+      <a
+        href="#"
+        class="btn btn-sm btn-outline-info me-2"
+        hx-get="/api/policies/{{ policy.id }}/statement"
+        hx-target="#content"
+        hx-swap="innerHTML"
+        data-policy="{{ policy.id }}"
+        data-policy-number="{{ policy.policy_number }}"
+        title="Preview the policy's reconciliation statement"
+      >Preview</a>
+      <a
+        href="/api/policies/{{ policy.id }}/statement.pdf"
+        class="btn btn-sm btn-outline-dark me-2"
+        title="Download the statement as a PDF"
+      >Download</a>
+      {% endif %}
+      {% if can_send_statement %}
+      <a
+        href="#"
+        class="btn btn-sm btn-outline-secondary"
+        id="send-{{ policy.id }}"
+        data-policy="{{ policy.id }}"
+        data-policy-number="{{ policy.policy_number }}"
+        title="Email the statement to the policyholder"
+      >Email</a>
+      {% endif %}
     </span>
   </li>
   {% else %}

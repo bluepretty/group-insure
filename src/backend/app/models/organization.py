@@ -18,6 +18,10 @@ class Organization(Base):
     name: Mapped[str] = mapped_column(String(200))
     # "insurer" | "broker" | "policyholder"
     type: Mapped[str] = mapped_column(String(50), default="insurer")
+    # Email is a first-class, optional field: any present value is validated
+    # (validators.validate_email), but absence is always allowed. Nullable so
+    # existing records and the smoke DB are unaffected.
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: dt.datetime.now(dt.timezone.utc)

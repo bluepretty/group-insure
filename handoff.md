@@ -153,3 +153,70 @@ Run **from `src/backend`** (templates/static are resolved relative to there). Th
   **1 passed.**
 - No background sweep, no grace-timer service, no `void_policy` — that's a later
   lapse follow-up. `GRACE_DAYS` is a module constant (not runtime config) in v1.
+
+
+## Stage 11 (Policy Statement: PDF, Inline Preview, Email) — complete, committed
+- Spec: `.claude/plan-stage11.md`. Three faces of one read-only roll-up; the
+  statement is a policy's reconciliation document. Single source of truth for
+  email validation (`services/validators.py::validate_email`) applied on entry to
+  every external record — Party, Organization, User.
+- Validation: `services/validators.py` — `validate_email(value)` is the single
+  source of truth: strips, lowercases, returns `None` for empty/missing, raises
+  `ValueError` for anything that isn't a syntactically valid email. No record
+  type drifts on what "valid" means.
+- Part 0 (email on every record): `models/party.py`, `models/organization.py`,
+  `models/user.py` — new nullable `email: str` on each (nullable so the smoke DB
+  and existing rows are unaffected). `services/parties.py::add_party` — optional
+  `email` param, validated before construction. `api/parties.py::create_party` and
+  `party_create` — pass/validate `email` (`Form(None)`), `ValueError` → 400 JSON.
+  `api/auth.py::register` — `RegisterModel.email` now validated; `ValueError` → 400
+  JSON. A malformed address returns `400`, a valid one is stored lower-cased.
+- Part 1 (builder): `services/statements.py::build_statement(db, *, policy_id) ->
+  dict` — read-only, plain-Python roll-up of Policy / Party / Organization /
+  Product / Invoice / Payment; returns `{policy_number, status, start_date,
+  end_date, premium, product_name, organization_name, policyholder_name,
+  policyholder_email, invoices[], total_invoiced, total_paid, balance_outstanding,
+  as_of}`. Money rounds to 2 dp; a nullable/None column contributes 0.0 so an
+  empty policy still renders a coherent statement. Raises `ValueError` for an
+  unknown policy_id. `render_statement_pdf(stmt) -> bytes` — one ReportLab pass
+  over the same dict, so the PDF and the HTML preview always agree on numbers.
+- Part 2 (renderer): ReportLab 5.0.1 in-memory only, no file to disk, no third
+  party assets. Added `reportlab>=4.0.0` to `pyproject.toml`.
+- Part 3 (preview/download): `api/statements.py` — `GET /{id}/statement` renders
+  the HTML partial (`partials/statement.html`, gated on `view_billing`) that loads
+  inline into `#content`; `GET /{id}/statement.pdf` streams `application/pdf` with
+  an inline disposition (`render_statement_pdf`). Both route the builder through a
+  `_statement()` helper that maps an unknown policy_id to `400` (not 500), so
+  `GET /{id}/statement.pdf` returns 400 for a missing id. Registered in
+  `main.py`; `products` import order corrected (`alphabetical`) to match.
+- Part 4 (frontend): `templates/partials/policy_list.html` — per policy a Preview
+  button (`hx-get=/api/policies/{id}/statement`, `hx-target="#content"`) and a
+  **Download** link to `{id}/statement.pdf`; both gated by new `can_view_statement`
+  (`view_billing`) passed from `api/policies.py::policy_list`. `templates/partials/
+  statement.html` — the rendered statement has a **Print** button
+  (`window.print()`) and, when `can_send`, an **Email statement** button carrying
+  `{policy-number, policyholder-email}`; policy/invoice summaries plus paid/billed
+  columns. `static/css/style.css` — new `@media print` block: prints a
+  page-sized PDF (0.75in margins), hides `.no-print`/sidebar/buttons so only the
+  `.statement` node renders.
+- Part 5 (email delivery): `services/emails.py` — `send_statement(db, *, policy_id,
+  to_email=None, actor_id=None) -> dict` builds one `MIMEMultipart` with the PDF
+  as an attachment, sends via `smtplib` using `core.config` SMTP settings, and
+  records `record_log(action="statement_sent", ...)`. `api/statements.py` —
+  `POST /{id}/statement/send`, confirm-gated (`SendStatementModel` defaults
+  `confirm: true`) + `manage_billing`; returns 400 JSON on `ValueError` (unknown
+  id) or `RuntimeError` (SMTP disabled / no recipient). `core/config.py` — SMTP
+  settings (`smtp_enabled` etc.) default to disabled, so the send path 400s in dev
+  rather than attempting a real send.
+- The statement is always emailed to the policyholder's stored, validated email
+  (`stmt['policyholder_email']`) — never a free-form address at send time.
+- Smoke test: `api/test_smoke.py` added a Stage 11 block — malformed email on a
+  party → 400; a valid address stored lower-cased; `build_statement` returns
+  non-zero `total_invoiced`/`total_paid`; preview renders (`200`, policy number in
+  body) and the broker can view (`view_billing`) but the send is `403` (needs
+  `manage_billing`); `.pdf` returns `application/pdf` with `%PDF` magic; confirm-
+  send with SMTP disabled → `400` (no `sent`); unknown policy → `400`. **1 passed.**
+- Security: professional accounts only (underwriter/broker); JWT secret in `.env`
+  (gitignored at repo root line 24); `.env` never committed. `reportlab` is a
+  hard runtime dependency now (was previously working in the venv without the
+  pyproject entry).

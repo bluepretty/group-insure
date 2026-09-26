@@ -27,6 +27,10 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     password: Mapped[str] = mapped_column(String(255))
     roles: Mapped[str] = mapped_column(String(255))  # semicolon-separated
+    # Email is a first-class, optional field: any present value is validated
+    # (validators.validate_email), but absence is always allowed. Nullable so
+    # existing records and the smoke DB are unaffected.
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: dt.datetime.now(dt.timezone.utc)

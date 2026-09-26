@@ -743,5 +743,84 @@ def test_smoke():
 
 
 
+
+    # --- Stage 11: policy statement (preview / PDF / email) ----------------
+
+    POLICY_NUMBER = "POL-001"
+
+    # Email addresses are validated on entry (single source of truth). A
+    # malformed address on the policyholder party is rejected with 400.
+    r = client.post(
+        "/api/parties",
+        json={"name": "Bad Email Co", "party_type": "policyholder",
+              "email": "not-an-email"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
+    # A well-formed address is stored lower-cased (validate_email normalises).
+    r = client.post(
+        "/api/parties",
+        json={"name": "Good Email Co", "party_type": "policyholder",
+              "email": "Policyholder@Example.COM"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+
+    # build_statement returns non-zero roll-up totals for the paid POL-001.
+    from app.services.statements import build_statement
+    stmt = build_statement(_SessionLocal(), policy_id=policy_id)
+    assert stmt["total_invoiced"] > 0.0, stmt
+    assert stmt["total_paid"] > 0.0, stmt
+
+    # Preview renders (HTML fragment, gated on view_billing).
+    r = client.get(
+        f"/api/policies/{policy_id}/statement",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert POLICY_NUMBER in r.text, r.text
+
+    # The broker can preview too (view_billing) but cannot email (needs
+    # manage_billing): the send path is 403, not 200.
+    r = client.get(
+        f"/api/policies/{policy_id}/statement",
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 200, r.text
+
+    # The PDF endpoint streams application/pdf and only needs view_billing.
+    r = client.get(
+        f"/api/policies/{policy_id}/statement.pdf",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/pdf", r.headers
+    assert r.content[:4] == b"%PDF", r.content[:4]
+
+    # The send path requires manage_billing: a broker is refused.
+    r = client.post(
+        f"/api/policies/{policy_id}/statement/send",
+        json={"confirm": True},
+        headers={"Authorization": f"Bearer {broker_token}"},
+    )
+    assert r.status_code == 403, r.text
+
+    # With SMTP disabled (default), the confirm-send endpoint refuses with 400.
+    r = client.post(
+        f"/api/policies/{policy_id}/statement/send",
+        json={"confirm": True},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+    assert "sent" not in r.text, r.text
+
+    # An unknown policy raises 400 (not 500).
+    r = client.get(
+        "/api/policies/999999/statement.pdf",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 400, r.text
+
 if __name__ == "__main__":
     test_smoke()

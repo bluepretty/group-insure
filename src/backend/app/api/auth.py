@@ -16,6 +16,7 @@ from app.core.database import get_db
 from app.core.security import create_token, decode_token, verify_password
 from app.models.user import User, hash_password
 from app.services.audit import record_log
+from app.services.validators import validate_email
 
 router = APIRouter(tags=["auth"])
 
@@ -119,10 +120,15 @@ def register(payload: RegisterModel, db: Session = Depends(get_db)) -> dict:
     existing = db.scalar(select(User).where(User.username == payload.username))
     if existing:
         raise HTTPException(status_code=409, detail="Username already exists")
+    try:
+        email = validate_email(payload.email)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
     user = User(
         username=payload.username,
         password=hash_password(payload.password),
         roles=payload.roles,
+        email=email,
         active=True,
     )
     db.add(user)

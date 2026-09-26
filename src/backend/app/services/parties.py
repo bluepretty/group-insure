@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.party import Party
 from app.services.audit import record_log
+from app.services.validators import validate_email
 
 
 def list_parties(db: Session, *, org_id: int | None = None) -> list[Party]:
@@ -27,6 +28,7 @@ def add_party(
     *,
     name: str,
     party_type: str,
+    email: str | None = None,
     broker_id: int | None = None,
     organization_id: int | None = None,
     active: bool = True,
@@ -34,6 +36,7 @@ def add_party(
     party = Party(
         name=name,
         party_type=party_type,
+        email=validate_email(email),
         broker_id=broker_id,
         organization_id=organization_id,
         active=active,
