@@ -31,10 +31,101 @@
 <ul class="list-group">
   {% for product in products %}
   <li class="list-group-item d-flex justify-content-between">
-    <span>{{ product.name }} <span class="text-muted small">— {{ product.product_type }}</span></span>
-    <span class="badge bg-info rounded-pill">{{ product.product_type }}</span>
+    <span>
+      {{ product.name }}
+      <span class="text-muted small">— {{ product.product_type }}</span>
+      {% if not product.is_active %}<span class="badge bg-secondary ms-1">inactive</span>{% endif %}
+    </span>
+    <span>
+      <span class="badge bg-info rounded-pill">{{ product.product_type }}</span>
+      {% if manage_products %}
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-primary ms-2"
+        hx-get="/api/products/{{ product.id }}"
+        hx-target="#edit-modal-body"
+        hx-swap="innerHTML"
+        hx-on::after-request="populateEditModal(this, {{ product.id }}, '{{ product.name }}', '{{ product.product_type }}', '{{ product.description or '' }}', {{ 'true' if product.is_active else 'false' }})"
+        data-bs-toggle="modal"
+        data-bs-target="#edit-product-modal">
+        <i class="bi bi-pencil"></i> Edit
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-danger"
+        hx-delete="/api/products/{{ product.id }}"
+        hx-target="#content"
+        hx-swap="innerHTML"
+        hx-on::after-request="refreshOnProductDelete(this)">
+        <i class="bi bi-trash"></i> Delete
+      </button>
+      {% endif %}
+    </span>
   </li>
   {% else %}
   <li class="list-group-item text-muted">No products yet.</li>
   {% endfor %}
 </ul>
+
+<!-- Edit modal -->
+<div class="modal fade" id="edit-product-modal" tabindex="-1" aria-labelledby="edit-product-modal-label" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="edit-product-form" hx-put hx-target="#content" hx-swap="innerHTML" hx-on::after-request="onProductEditDone(this)" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="edit-product-modal-label">Edit product</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="edit-modal-body">
+        <input type="hidden" name="product_id" id="edit-product-id" value="">
+        <div class="mb-3">
+          <label class="form-label" for="edit-product-name">Name</label>
+          <input type="text" class="form-control" name="name" id="edit-product-name" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="edit-product-type">Type</label>
+          <input type="text" class="form-control" name="product_type" id="edit-product-type" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="edit-product-description">Description</label>
+          <input type="text" class="form-control" name="description" id="edit-product-description" placeholder="optional">
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="is_active" id="edit-product-active" value="true">
+          <label class="form-check-label" for="edit-product-active">Active</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function populateEditModal(el, id, name, product_type, description, is_active) {
+    var modalEl = document.getElementById('edit-product-modal');
+    var form = document.getElementById('edit-product-form');
+    form.dataset.productId = id;
+    document.getElementById('edit-product-id').value = id;
+    document.getElementById('edit-product-name').value = name;
+    document.getElementById('edit-product-type').value = product_type;
+    document.getElementById('edit-product-description').value = description || '';
+    document.getElementById('edit-product-active').checked = !!is_active;
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }
+
+  function onProductEditDone(el) {
+    var modalEl = document.getElementById('edit-product-modal');
+    bootstrap.Modal.getInstance(modalEl)?.hide();
+    fetch('/api/products/list', { headers: { 'HX-Request': 'true' } })
+      .then(function (r) { return r.text(); })
+      .then(function (html) { document.getElementById('content').innerHTML = html; });
+  }
+
+  function refreshOnProductDelete(el) {
+    fetch('/api/products/list', { headers: { 'HX-Request': 'true' } })
+      .then(function (r) { return r.text(); })
+      .then(function (html) { document.getElementById('content').innerHTML = html; });
+  }
+</script>
