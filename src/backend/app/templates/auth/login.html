@@ -18,7 +18,7 @@
 
           <form action="/api/auth/login" method="post" hx-post="/api/auth/login"
                 hx-target="#errors" hx-swap="innerHTML"
-                hx-on::after-request="if (requestEvent.xhr.status === 200) window.location.href='/dashboard'; this.reset();">
+                hx-on::after-request="if (requestEvent.xhr.status === 200) window.location.href='/dashboard';">
             <div class="mb-3">
               <label class="form-label">Username</label>
               <input type="text" class="form-control" name="username" required autofocus>
