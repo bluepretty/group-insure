@@ -17,7 +17,8 @@
     //   - 403  -> authenticated but not allowed; show a dismissible alert in place.
     //   - else -> show the backend's detail message as an alert.
     document.addEventListener("htmx:responseError", function (evt) {
-      var xhr = evt.xhr;
+      var d = evt.detail || evt;
+      var xhr = d.xhr;
       if (xhr.status === 401) {
         window.location.href = "/login";
         return;

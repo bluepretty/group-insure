@@ -164,6 +164,11 @@ async def register(
             status_code=400,
             detail="username, password, and email are required",
         )
+    if len(password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 8 characters long",
+        )
     try:
         payload = RegisterModel(
             username=username, password=password, email=email, roles=roles
