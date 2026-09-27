@@ -14,11 +14,8 @@
           <div class="alert alert-danger" role="alert">{{ error }}</div>
           {% endif %}
 
-          <form hx-post="/api/auth/register"
-                hx-target="#errors"
-                hx-swap="innerHTML"
-                hx-on::before-request="var fd = new FormData(this); var obj = {}; fd.forEach((v, k) => obj[k] = v); requestEvent.requestHeaders['Content-Type'] = 'application/json'; requestEvent.body = JSON.stringify(obj);"
-                hx-on::after-request="if (requestEvent.xhr.status === 200) { document.getElementById('errors').innerHTML=''; window.location.href='/login'; }">
+          <form action="/api/auth/register" method="post" hx-post="/api/auth/register"
+                hx-target="#errors" hx-swap="innerHTML">
             <div class="mb-3">
               <label class="form-label">Username</label>
               <input type="text" class="form-control" name="username" required autofocus>

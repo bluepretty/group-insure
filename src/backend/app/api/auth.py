@@ -6,7 +6,7 @@ endpoints are served via HTML templates for the server-rendered admin UI.
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
@@ -122,7 +122,55 @@ def require_role(permission: str):
 
 
 @router.post("/register", response_model=dict)
-def register(payload: RegisterModel, db: Session = Depends(get_db)) -> dict:
+async def register(
+    request: Request,
+    payload: RegisterModel | None = None,
+    # Form fields let the server-rendered browser form (application/x-www-form-urlencoded)
+    # reach this endpoint without any client-side JS. FastAPI can't merge a Pydantic body
+    # and Form fields in one signature, so the form fields are the primary path and the
+    # Pydantic model is the JSON fallback for API/HTMX clients.
+    username: str | None = Form(None),
+    password: str | None = Form(None),
+    email: str | None = Form(None),
+    roles: str | None = Form(None),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Register a new account.
+
+    Accepts `application/x-www-form-urlencoded` (the browser's register.html form) and
+    `application/json` (API/HTMX clients). On success returns an `HX-Redirect` header so
+    the browser form navigates to `/login` — relying on HX-Redirect keeps this consistent
+    with the login flow, which avoids htmx's swap-on-JSON-body problem.
+    """
+    # HTML form posts urlencoded data — take those first.
+    if payload is None:
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        # Fill any field the form didn't provide from the JSON body (API/HTMX clients),
+        # so a JSON POST works even if someone posts partial fields alongside the form params.
+        if username is None:
+            username = body.get("username") if body else None
+        if password is None:
+            password = body.get("password") if body else None
+        if email is None:
+            email = body.get("email") if body else None
+        if roles is None:
+            roles = body.get("roles") if body else None
+
+    if not all([username, password, email]):
+        raise HTTPException(
+            status_code=400,
+            detail="username, password, and email are required",
+        )
+    try:
+        payload = RegisterModel(
+            username=username, password=password, email=email, roles=roles
+        )
+    except Exception:
+        raise
+
     existing = db.scalar(select(User).where(User.username == payload.username))
     if existing:
         raise HTTPException(status_code=409, detail="Username already exists")
@@ -130,8 +178,8 @@ def register(payload: RegisterModel, db: Session = Depends(get_db)) -> dict:
         email = validate_email(payload.email)
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
-    roles = (payload.roles or "").strip()
-    if roles not in ALLOWED_ROLES:
+    roles_val = (payload.roles or "").strip()
+    if roles_val not in ALLOWED_ROLES:
         # The stored role is *server-owned*: a caller can not self-grant any
         # permission. Reject before writing anything rather than falling back to
         # a safe default, so a typo doesn't silently register a usable account.
@@ -145,14 +193,16 @@ def register(payload: RegisterModel, db: Session = Depends(get_db)) -> dict:
     user = User(
         username=payload.username,
         password=hash_password(payload.password),
-        roles=roles,   # validated against ALLOWED_ROLES above
+        roles=roles_val,   # validated against ALLOWED_ROLES above
         email=email,
         active=True,
     )
     db.add(user)
     db.commit()
     record_log(db, action="register", actor_id=user.id, entity="User", entity_id=user.id)
-    return {"id": user.id, "username": user.username}
+    resp = JSONResponse(content={"id": user.id, "username": user.username})
+    resp.headers["HX-Redirect"] = "/login"
+    return resp
 
 
 @router.post("/login", response_model=dict)
