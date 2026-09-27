@@ -18,7 +18,9 @@ class Benefit(Base):
     __table_args__ = (UniqueConstraint("product_id", "code", name="uq_benefit_product_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    product_id: Mapped[int] = mapped_column(ForeignKey("product_catalog.id"))
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("product_catalog.id"), index=True
+    )
     # Unique per product (DB-level composite unique below).
     code: Mapped[str] = mapped_column(String(60))
     name: Mapped[str] = mapped_column(String(200))

@@ -30,7 +30,7 @@ class LifeEvent(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     policy_id: Mapped[int] = mapped_column(
-        ForeignKey("policies.id"), nullable=True
+        ForeignKey("policies.id"), nullable=True, index=True
     )
     member_id: Mapped[int | None] = mapped_column(
         ForeignKey("members.id"), nullable=True

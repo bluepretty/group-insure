@@ -8,7 +8,7 @@ outstanding (unpaid) invoice is issued per policy.
 import datetime as dt
 import re
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.invoice import Invoice
@@ -28,13 +28,19 @@ INVOICE_NUMBER_RE = re.compile(r"^INV-(\d+)(?:-ADJ)?$")
 
 
 def _next_invoice_number(db: Session, policy_id: int) -> str:
+    # Derive the next number from a per-policy DB aggregate rather than scanning
+    # every invoice for the policy in Python. This is O(1) (indexed by
+    # `policy_id`), avoids the restart-duplicate race noted in the module
+    # comment, and matches the `claim_number` fix.
+    row = db.scalar(
+        select(func.max(Invoice.invoice_number))
+        .where(Invoice.policy_id == policy_id)
+    )
     highest = 0
-    for inv in db.scalars(
-        select(Invoice).where(Invoice.policy_id == policy_id)
-    ).all():
-        m = INVOICE_NUMBER_RE.match(inv.invoice_number or "")
+    if row is not None:
+        m = INVOICE_NUMBER_RE.match(row)
         if m:
-            highest = max(highest, int(m.group(1)))
+            highest = int(m.group(1))
     return f"INV-{highest + 1}"
 
 

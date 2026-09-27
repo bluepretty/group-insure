@@ -12,7 +12,7 @@ class Payment(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     invoice_id: Mapped[int | None] = mapped_column(
-        ForeignKey("invoices.id"), nullable=True
+        ForeignKey("invoices.id"), nullable=True, index=True
     )
     amount: Mapped[float] = mapped_column(Numeric(12, 2))
     method: Mapped[str | None] = mapped_column(String(20), nullable=True)

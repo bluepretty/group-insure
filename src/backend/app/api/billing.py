@@ -9,6 +9,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth import require_role
@@ -117,11 +118,12 @@ def invoice_detail(
     invoice = get_invoice(db, invoice_id=invoice_id)
     if invoice is None:
         return HTMLResponse("<p class='text-muted'>Invoice not found.</p>")
-    payments = [
-        p
-        for p in list_payments(db)
-        if p.invoice_id == invoice_id
-    ]
+    # Scope the query to this invoice's payments instead of loading every
+    # payment in the app and filtering in Python. A broker with thousands of
+    # invoices must never pay for an O(N) scan of the whole payments table here.
+    payments = db.scalars(
+        select(Payment).where(Payment.invoice_id == invoice_id)
+    ).all()
     return templates.TemplateResponse(
         request,
         "partials/invoice_detail.html",

@@ -28,8 +28,12 @@ class Claim(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     claim_number: Mapped[str] = mapped_column(String(60), unique=True, index=True)
-    policy_id: Mapped[int] = mapped_column(ForeignKey("policies.id"))
-    member_id: Mapped[int] = mapped_column(ForeignKey("members.id"))
+    policy_id: Mapped[int] = mapped_column(
+        ForeignKey("policies.id"), index=True
+    )
+    member_id: Mapped[int] = mapped_column(
+        ForeignKey("members.id"), index=True
+    )
     benefit_id: Mapped[int | None] = mapped_column(
         ForeignKey("benefits.id"), nullable=True
     )

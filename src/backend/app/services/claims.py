@@ -15,7 +15,7 @@ import datetime as dt
 
 import re
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.benefit import Benefit
@@ -34,11 +34,17 @@ CLAIM_NUMBER_RE = re.compile(r"^CLM-(\d+)$")
 
 
 def _next_claim_number(db: Session) -> str:
+    # Derive the next claim number from a DB aggregate rather than scanning the
+    # whole claims table in Python. A full scan is O(N) on every submission and
+    # (combined with the module-global counter comment above) race-prone; the
+    # `claim_number` unique index means the number must never collide, so a
+    # server-side MAX is both cheaper and the correct approach.
+    row = db.scalar(select(func.max(Claim.claim_number)))
     highest = 0
-    for claim in db.scalars(select(Claim)).all():
-        m = CLAIM_NUMBER_RE.match(claim.claim_number or "")
+    if row is not None:
+        m = CLAIM_NUMBER_RE.match(row)
         if m:
-            highest = max(highest, int(m.group(1)))
+            highest = int(m.group(1))
     return f"CLM-{highest + 1}"
 
 

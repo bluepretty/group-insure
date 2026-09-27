@@ -19,8 +19,12 @@ class Member(Base):
     __table_args__ = (UniqueConstraint("policy_id", "member_number", name="uq_member_policy_number"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    policy_id: Mapped[int] = mapped_column(ForeignKey("policies.id"))
-    party_id: Mapped[int | None] = mapped_column(ForeignKey("parties.id"), nullable=True)
+    policy_id: Mapped[int] = mapped_column(
+        ForeignKey("policies.id"), index=True
+    )
+    party_id: Mapped[int | None] = mapped_column(
+        ForeignKey("parties.id"), nullable=True, index=True
+    )
     organization_id: Mapped[int | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
     # Unique per policy (enforced in service layer; DB-level composite unique below).
     member_number: Mapped[str] = mapped_column(String(60))

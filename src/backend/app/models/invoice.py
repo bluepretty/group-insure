@@ -19,7 +19,7 @@ class Invoice(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     policy_id: Mapped[int | None] = mapped_column(
-        ForeignKey("policies.id"), nullable=True
+        ForeignKey("policies.id"), nullable=True, index=True
     )
     invoice_number: Mapped[str] = mapped_column(String(20))
     # "issued" | "partially_paid" | "paid" | "written_off"

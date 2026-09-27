@@ -20,7 +20,7 @@ class Policy(Base):
     policy_number: Mapped[str] = mapped_column(String(80))
     product_id: Mapped[int] = mapped_column(ForeignKey("product_catalog.id"))
     party_id: Mapped[int | None] = mapped_column(
-        ForeignKey("parties.id"), nullable=True
+        ForeignKey("parties.id"), nullable=True, index=True
     )
     organization_id: Mapped[int | None] = mapped_column(
         ForeignKey("organizations.id"), nullable=True
