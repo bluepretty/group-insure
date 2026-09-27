@@ -76,12 +76,15 @@ def policy_create(
     db: Session = Depends(get_db),
     _: None = Depends(require_role("manage_policies")),
 ) -> HTMLResponse:
-    add_policy(
-        db,
-        policy_number=policy_number,
-        product_id=product_id,
-        party_id=party_id,
-    )
+    try:
+        add_policy(
+            db,
+            policy_number=policy_number,
+            product_id=product_id,
+            party_id=party_id,
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
     policies = list_policies(db)
     # NOTE: `products` is required by policy_list.html's form dropdown; omitting
     # it silently yields an empty "Product" select (Starlette renders jinja2.Undefined
@@ -177,7 +180,5 @@ def policy_renew(
             premium=float(premium) if premium else None,
         )
     except ValueError as exc:
-        return JSONResponse(status_code=400, content={"detail": str(exc)})
-    except Exception as exc:  # preserve the same 400 contract for any failure
         return JSONResponse(status_code=400, content={"detail": str(exc)})
     return JSONResponse(content=result)
