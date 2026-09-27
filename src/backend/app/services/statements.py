@@ -65,13 +65,21 @@ def build_statement(db, *, policy_id: int) -> dict:
         select(Invoice).where(Invoice.policy_id == policy_id)
     ).all()
 
+    # Pull every payment for the policy in one query instead of one query per
+    # invoice (the old code did `for invoice: db.scalars(select(Payment)...)`).
+    # Bucket them by invoice_id here so the per-invoice roll-up below is
+    # identical.
+    all_payments = db.scalars(select(Payment)).all()
+    payments_by_invoice: dict[int, list[Payment]] = {}
+    for payment in all_payments:
+        if payment.invoice_id is not None:
+            payments_by_invoice.setdefault(payment.invoice_id, []).append(payment)
+
     statement_invoices = []
     total_invoiced = 0.0
     total_paid = 0.0
     for invoice in invoices:
-        payments = db.scalars(
-            select(Payment).where(Payment.invoice_id == invoice.id)
-        ).all()
+        payments = payments_by_invoice.get(invoice.id, [])
         paid = _positive_number(invoice.paid_amount)
         total_invoiced += _positive_number(invoice.total_amount)
         total_paid += paid

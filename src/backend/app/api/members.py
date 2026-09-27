@@ -36,9 +36,11 @@ class MemberModel(BaseModel):
 def list_members_endpoint(
     db: Session = Depends(get_db),
     party_id: int | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
     _: None = Depends(require_role("view_members")),
 ) -> list[MemberModel]:
-    return list_members(db, party_id=party_id)
+    return list_members(db, party_id=party_id, limit=limit, offset=offset)
 
 
 @router.get("/list")

@@ -32,9 +32,11 @@ class BenefitModel(BaseModel):
 def list_benefits_endpoint(
     db: Session = Depends(get_db),
     product_id: int | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
     _: None = Depends(require_role("view_benefits")),
 ) -> list[BenefitModel]:
-    return list_benefits(db, product_id=product_id)
+    return list_benefits(db, product_id=product_id, limit=limit, offset=offset)
 
 
 @router.get("/coverage", response_model=list[BenefitModel])

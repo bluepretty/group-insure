@@ -1,17 +1,20 @@
 """Aggregate reporting over the whole platform (Stage 8).
 
-Reporting is a read-only roll-up: ``build_report`` runs one pass over the
-existing tables and returns a flat dict of counts and money totals. Nothing is
-materialized to a new table — the dashboard overview cards, the Reports page,
-and the JSON endpoint all render the same dict, so they always agree.
+Reporting is a read-only roll-up: ``build_report`` runs a handful of
+column-level aggregate queries (``COUNT``, ``SUM`` over ``CASE`` buckets) and
+returns a flat dict of counts and money totals. Nothing is materialized to a
+new table — the dashboard overview cards, the Reports page, and the JSON
+endpoint all render the same dict, so they always agree.
 
-Bucket membership is defined explicitly (see below) so the numbers are easy to
-explain. Money values round to 2 decimals; a nullable/None column contributes 0.0
-so an empty platform returns zeros rather than raising.
+Aggregating in SQL rather than loading every row and counting in Python means
+the endpoint cost is O(1) query work, not proportional to table size. Bucket
+membership is defined explicitly (see below) so the numbers are easy to
+explain. Money values round to 2 decimals; a nullable/None column contributes
+0.0 so an empty platform returns zeros rather than raising.
 """
 import datetime as dt
 
-from sqlalchemy import select
+from sqlalchemy import Case, func, select
 
 from app.models.benefit import Benefit
 from app.models.claim import Claim
@@ -57,48 +60,132 @@ def build_report(db) -> dict:
     - paid_total: float
     - outstanding_total: float  (invoiced_total - paid_total)
     """
-    policies = db.scalars(select(Policy)).all()
-    members = db.scalars(select(Member)).all()
-    benefits = db.scalars(select(Benefit)).all()
-    elections = db.scalars(select(MemberBenefit)).all()
-    claims = db.scalars(select(Claim)).all()
-    invoices = db.scalars(select(Invoice)).all()
-    parties = db.scalars(select(Party)).all()
-
-    active_policies = sum(1 for p in policies if p.status == "active")
-    lapsed_policies = sum(1 for p in policies if p.status == "lapsed")
+    # Each aggregate is a single column-level query rather than a full-table
+    # row load. The multi-column selects are executed with ``db.execute(...).one()``
+    # (a Session exposes no ``.one()`` of its own) and the rows unpack as tuples.
+    # ``func.count()`` is an int; ``func.sum()`` over a column with no
+    # non-null rows yields NULL in SQLite, so wrap every SUM in COALESCE(.., 0)
+    # to keep these non-None. The tuples are coerced to int for the report
+    # contract (counts are always int).
+    (
+        policies,
+        active_policies,
+        lapsed_policies,
+    ) = db.execute(
+        select(
+            func.count(Policy.id),
+            func.coalesce(
+                func.sum(Case((Policy.status == "active", 1)), else_=0), 0
+            ),
+            func.coalesce(
+                func.sum(Case((Policy.status == "lapsed", 1)), else_=0), 0
+            ),
+        )
+    ).one()
+    policies = int(policies)
+    active_policies = int(active_policies)
+    lapsed_policies = int(lapsed_policies)
     open_policies = active_policies + lapsed_policies
 
-    active_members = sum(1 for m in members if m.status == "active")
+    (members, active_members) = db.execute(
+        select(
+            func.count(Member.id),
+            func.coalesce(
+                func.sum(Case((Member.status == "active", 1)), else_=0), 0
+            ),
+        )
+    ).one()
+    members = int(members)
+    active_members = int(active_members)
 
-    enrolled_premium = sum(_positive_number(e.premium) for e in elections)
-    policy_premium = sum(_positive_number(p.premium) for p in policies)
+    (
+        claims_total,
+        claims_open,
+        claims_paid,
+        claims_denied,
+    ) = db.execute(
+        select(
+            func.count(Claim.id),
+            func.coalesce(
+                func.sum(
+                    Case(
+                        ((Claim.status.in_(("submitted", "approved"))), 1),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+            func.coalesce(
+                func.sum(Case((Claim.status == "paid", 1)), else_=0), 0
+            ),
+            func.coalesce(
+                func.sum(Case((Claim.status == "rejected", 1)), else_=0), 0
+            ),
+        )
+    ).one()
+    (
+        claims_total,
+        claims_open,
+        claims_paid,
+        claims_denied,
+    ) = (
+        int(claims_total),
+        int(claims_open),
+        int(claims_paid),
+        int(claims_denied),
+    )
+    claims_closed = claims_paid + claims_denied
+    claims_paid_total = float(
+        db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        Case(
+                            ((Claim.status == "paid", Claim.amount_approved)),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                )
+            )
+        )
+    )
 
-    claims_total = len(claims)
-    claims_open = sum(
-        1 for c in claims if c.status in ("submitted", "approved")
+    invoiced_total = float(
+        db.scalar(
+            select(func.coalesce(func.sum(Invoice.total_amount), 0.0))
+        )
     )
-    claims_paid = sum(1 for c in claims if c.status == "paid")
-    claims_denied = sum(1 for c in claims if c.status == "rejected")
-    claims_closed = sum(
-        1 for c in claims if c.status in ("paid", "rejected")
+    paid_total = float(
+        db.scalar(
+            select(func.coalesce(func.sum(Invoice.paid_amount), 0.0))
+        )
     )
-    claims_paid_total = sum(
-        _positive_number(c.amount_approved) for c in claims if c.status == "paid"
-    )
-
-    invoiced_total = sum(_positive_number(i.total_amount) for i in invoices)
-    paid_total = sum(_positive_number(i.paid_amount) for i in invoices)
     outstanding_total = invoiced_total - paid_total
+
+    enrolled_premium = float(
+        db.scalar(
+            select(func.coalesce(func.sum(MemberBenefit.premium), 0.0))
+        )
+    )
+    policy_premium = float(
+        db.scalar(
+            select(func.coalesce(func.sum(Policy.premium), 0.0))
+        )
+    )
+
+    policyholders = int(
+        db.scalar(select(func.count(Party.id)))
+    )
 
     return {
         "as_of": dt.datetime.now(dt.timezone.utc),
-        "policyholders": len(parties),
-        "policies": len(policies),
+        "policyholders": policyholders,
+        "policies": policies,
         "active_policies": active_policies,
         "lapsed_policies": lapsed_policies,
         "open_policies": open_policies,
-        "members": len(members),
+        "members": members,
         "active_members": active_members,
         "enrolled_premium": _round_money(enrolled_premium),
         "policy_premium": _round_money(policy_premium),
@@ -107,8 +194,8 @@ def build_report(db) -> dict:
         "claims_paid": claims_paid,
         "claims_denied": claims_denied,
         "claims_closed": claims_closed,
-        "claims_paid_total": _round_money(claims_paid_total),
-        "invoiced_total": _round_money(invoiced_total),
-        "paid_total": _round_money(paid_total),
-        "outstanding_total": _round_money(outstanding_total),
+        "claims_paid_total": _round_money(claims_paid_total or 0.0),
+        "invoiced_total": _round_money(invoiced_total or 0.0),
+        "paid_total": _round_money(paid_total or 0.0),
+        "outstanding_total": _round_money(outstanding_total or 0.0),
     }

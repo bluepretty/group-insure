@@ -23,9 +23,11 @@ class ProductModel(BaseModel):
 @router.get("", response_model=list[ProductModel])
 def list_products_endpoint(
     db: Session = Depends(get_db),
+    limit: int | None = None,
+    offset: int | None = None,
     _: None = Depends(require_role("view_products")),
 ) -> list[ProductModel]:
-    return list_products(db)
+    return list_products(db, limit=limit, offset=offset)
 
 
 @router.get("/list")

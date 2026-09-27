@@ -64,6 +64,8 @@ def list_claims(
     policy_id: int | None = None,
     member_id: int | None = None,
     party_id: int | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
 ) -> list[Claim]:
     """Return claims, optionally filtered by policy, member, or policyholder.
 
@@ -82,6 +84,10 @@ def list_claims(
         if policy_ids:
             stmt = stmt.where(Claim.policy_id.in_(policy_ids))
     stmt = stmt.order_by(Claim.created_at.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    if offset is not None:
+        stmt = stmt.offset(offset)
     return db.scalars(stmt).all()
 
 

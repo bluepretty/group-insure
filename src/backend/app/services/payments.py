@@ -16,8 +16,17 @@ from app.services.invoices import _reconcile_invoice
 from app.services.policies import change_policy_status
 
 
-def list_payments(db) -> list[Payment]:
+def list_payments(
+    db,
+    *,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[Payment]:
     stmt = select(Payment).order_by(Payment.created_at.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    if offset is not None:
+        stmt = stmt.offset(offset)
     return db.scalars(stmt).all()
 
 

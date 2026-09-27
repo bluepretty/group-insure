@@ -5,11 +5,21 @@ from app.models.product import Product
 from app.services.audit import record_log
 
 
-def list_products(db, *, active_only: bool = False) -> list[Product]:
+def list_products(
+    db,
+    *,
+    active_only: bool = False,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[Product]:
     stmt = select(Product)
     if active_only:
         stmt = stmt.where(Product.is_active.is_(True))
     stmt = stmt.order_by(Product.created_at.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    if offset is not None:
+        stmt = stmt.offset(offset)
     return db.scalars(stmt).all()
 
 

@@ -18,11 +18,21 @@ from app.services.audit import record_log
 from app.services.premiums import per_member_premium
 
 
-def list_benefits(db, *, product_id: int | None = None) -> list[Benefit]:
+def list_benefits(
+    db,
+    *,
+    product_id: int | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[Benefit]:
     stmt = select(Benefit)
     if product_id is not None:
         stmt = stmt.where(Benefit.product_id == product_id)
     stmt = stmt.order_by(Benefit.created_at.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    if offset is not None:
+        stmt = stmt.offset(offset)
     return db.scalars(stmt).all()
 
 

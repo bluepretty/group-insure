@@ -15,11 +15,21 @@ from app.services.audit import record_log
 VALID_STATUS = ("active", "inactive", "terminated")
 
 
-def list_members(db, *, party_id: int | None = None) -> list[Member]:
+def list_members(
+    db,
+    *,
+    party_id: int | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[Member]:
     stmt = select(Member)
     if party_id is not None:
         stmt = stmt.where(Member.party_id == party_id)
     stmt = stmt.order_by(Member.created_at.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    if offset is not None:
+        stmt = stmt.offset(offset)
     return db.scalars(stmt).all()
 
 

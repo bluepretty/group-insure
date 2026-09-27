@@ -43,16 +43,42 @@ def policy_premium(db, policy_id: int) -> dict:
             select(Member.id).where(Member.policy_id == policy_id)
         )
     )
+    # Batch the benefit lookups: the per-member helper issued one
+    # ``MemberBenefit`` + one ``Benefit`` query *per* member (an N+1), and this
+    # service is called on every renew, invoice issue, and census proration.
+    # Load the elections and every benefit they reference in two queries, then
+    # apply the identical per-member math so the totals are unchanged.
+    elections = list(db.scalars(stmt))
+    benefit_by_id = {}
+    if elections:
+        benefit_by_id = {
+            b.id: b
+            for b in db.scalars(
+                select(Benefit).where(
+                    Benefit.id.in_([e.benefit_id for e in elections])
+                )
+            )
+        }
     breakdown = []
     total = Decimal(0)
-    for election in db.scalars(stmt):
-        premium = per_member_premium(db, election.member_id)
+    for election in elections:
+        benefit = benefit_by_id.get(election.benefit_id)
+        if benefit is None:
+            # Mirrors per_member_premium: an unknown/missing benefit is an error.
+            raise ValueError(f"Unknown benefit_id: {election.benefit_id}")
+        rate = benefit.premium_rate
+        amount = election.election_amount
+        premium = (
+            Decimal(str(rate)) * Decimal(str(amount))
+            if rate is not None and amount is not None
+            else Decimal(0)
+        )
         election.premium = premium
         total += premium
         breakdown.append(
             {
                 "member_id": election.member_id,
-                "benefit_code": election.benefit.code,
+                "benefit_code": benefit.code,
                 "amount": float(premium),
             }
         )

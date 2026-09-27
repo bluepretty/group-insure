@@ -81,6 +81,8 @@ class _StatusRequest(BaseModel):
 @router.get("", response_model=list[ClaimSummaryModel])
 def list_claims_json(
     db: Session = Depends(get_db),
+    limit: int | None = None,
+    offset: int | None = None,
     _: None = Depends(require_role("view_claims")),
     policy_id: int | None = None,
     member_id: int | None = None,
@@ -88,7 +90,12 @@ def list_claims_json(
 ) -> list[ClaimSummaryModel]:
     """JSON list of claims, optionally scoped to a policy, member, or party."""
     return claim_service.list_claims(
-        db, policy_id=policy_id, member_id=member_id, party_id=party_id
+        db,
+        policy_id=policy_id,
+        member_id=member_id,
+        party_id=party_id,
+        limit=limit,
+        offset=offset,
     )
 
 

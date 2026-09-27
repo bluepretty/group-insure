@@ -64,6 +64,8 @@ def list_events(
     *,
     policy_id: int | None = None,
     event_type: str | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
 ) -> list[LifeEvent]:
     """List life events, optionally filtered by policy and/or event type."""
     stmt = select(LifeEvent)
@@ -71,6 +73,10 @@ def list_events(
         stmt = stmt.where(LifeEvent.policy_id == policy_id)
     if event_type is not None:
         stmt = stmt.where(LifeEvent.event_type == event_type)
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    if offset is not None:
+        stmt = stmt.offset(offset)
     return db.scalars(stmt.order_by(LifeEvent.created_at.desc())).all()
 
 

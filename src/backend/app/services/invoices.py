@@ -45,12 +45,20 @@ def _next_invoice_number(db: Session, policy_id: int) -> str:
 
 
 def list_invoices(
-    db, *, policy_id: int | None = None
+    db,
+    *,
+    policy_id: int | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
 ) -> list[Invoice]:
     stmt = select(Invoice)
     if policy_id is not None:
         stmt = stmt.where(Invoice.policy_id == policy_id)
     stmt = stmt.order_by(Invoice.created_at.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    if offset is not None:
+        stmt = stmt.offset(offset)
     return db.scalars(stmt).all()
 
 

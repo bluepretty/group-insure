@@ -55,9 +55,11 @@ class PaymentModel(BaseModel):
 def list_invoices_endpoint(
     db: Session = Depends(get_db),
     policy_id: int | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
     _: None = Depends(require_role("view_billing")),
 ) -> list[InvoiceModel]:
-    return list_invoices(db, policy_id=policy_id)
+    return list_invoices(db, policy_id=policy_id, limit=limit, offset=offset)
 
 
 @router.get("/invoices/json")
@@ -134,9 +136,11 @@ def invoice_detail(
 @router.get("/payments", response_model=list[PaymentModel])
 def list_payments_endpoint(
     db: Session = Depends(get_db),
+    limit: int | None = None,
+    offset: int | None = None,
     _: None = Depends(require_role("view_billing")),
 ) -> list[PaymentModel]:
-    return list_payments(db)
+    return list_payments(db, limit=limit, offset=offset)
 
 
 @router.post("/invoices")
