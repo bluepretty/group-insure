@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.api.auth import require_user
+from app.api.auth import require_user, _has_permission
 from app.core.database import get_db
 from app.core.security import create_token, hash_password, verify_password
 from app.models.user import User
@@ -37,5 +37,5 @@ def dashboard(
     return templates.TemplateResponse(
         request,
         "auth/dashboard.html",
-        {"user": user, "report": report},
+        {"user": user, "report": report, "manage_users": _has_permission(user, "manage_users")},
     )

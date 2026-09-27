@@ -1,0 +1,127 @@
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Users</h2>
+  <span class="text-muted small">{{ users|length }} account(s)</span>
+</div>
+
+<table class="table table-align-middle">
+  <thead>
+    <tr>
+      <th>Username</th>
+      <th>Email</th>
+      <th>Roles</th>
+      <th>Status</th>
+      <th class="text-end">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for user in users %}
+    <tr>
+      <td>{{ user.username }}</td>
+      <td>{{ user.email or '—' }}</td>
+      <td>{{ user.roles }}</td>
+      <td>
+        {% if user.active %}
+          <span class="badge bg-success">active</span>
+        {% else %}
+          <span class="badge bg-secondary">locked</span>
+        {% endif %}
+      </td>
+      <td class="text-end">
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-primary"
+          hx-get="/api/users/{{ user.id }}"
+          hx-target="#edit-modal-body"
+          hx-swap="innerHTML"
+          hx-on::after-request="populateEditModal(this, {{ user.id }}, '{{ user.username }}', '{{ user.email or '' }}', '{{ user.roles }}', {{ 'true' if user.active else 'false' }})"
+          data-bs-toggle="modal"
+          data-bs-target="#edit-user-modal">
+          <i class="bi bi-pencil"></i> Edit
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-danger"
+          hx-delete="/api/users/{{ user.id }}"
+          hx-target="#content"
+          hx-swap="innerHTML"
+          hx-on::after-request="refreshOnUserDelete(this)">
+          <i class="bi bi-trash"></i> Delete
+        </button>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="5" class="text-center text-muted py-4">No users yet.</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Edit modal -->
+<div class="modal fade" id="edit-user-modal" tabindex="-1" aria-labelledby="edit-user-modal-label" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="edit-user-form" hx-put hx-target="#content" hx-swap="innerHTML" hx-on::after-request="onUserEditDone(this)" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="edit-user-modal-label">Edit user</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="edit-modal-body">
+        <input type="hidden" name="username" id="edit-username" value="">
+        <div class="mb-3">
+          <label class="form-label" for="edit-email">Email</label>
+          <input type="text" class="form-control" name="email" id="edit-email" placeholder="optional">
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="edit-roles">Roles</label>
+          <select class="form-select" name="roles" id="edit-roles">
+            <option value="broker">Broker</option>
+            <option value="underwriter">Underwriter</option>
+          </select>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="active" id="edit-active" value="true">
+          <label class="form-check-label" for="edit-active">Active</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Populate the modal inputs when the Edit button's after-request returns the
+  // user (the hx-get call above). role is server-owned so we only ever accept
+  // the two known roles; active is passed as a JS boolean.
+  function populateEditModal(el, id, username, email, roles, active) {
+    var modalEl = document.getElementById('edit-user-modal');
+    var form = document.getElementById('edit-user-form');
+    form.dataset.userId = id;
+    document.getElementById('edit-username').value = username;
+    document.getElementById('edit-email').value = email || '';
+    var roleSel = document.getElementById('edit-roles');
+    roleSel.value = (roles === 'underwriter' || roles === 'broker') ? roles : 'broker';
+    var activeBox = document.getElementById('edit-active');
+    activeBox.checked = !!active;
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }
+
+  // After the edit form is saved (PUT) or failed, close the modal and reload
+  // the list so the table reflects the latest state.
+  function onUserEditDone(el) {
+    var modalEl = document.getElementById('edit-user-modal');
+    bootstrap.Modal.getInstance(modalEl)?.hide();
+    fetch('/api/users/list', { headers: { 'HX-Request': 'true' } })
+      .then(function (r) { return r.text(); })
+      .then(function (html) { document.getElementById('content').innerHTML = html; });
+  }
+
+  // After a delete (success or 409), reload the list.
+  function refreshOnUserDelete(el) {
+    fetch('/api/users/list', { headers: { 'HX-Request': 'true' } })
+      .then(function (r) { return r.text(); })
+      .then(function (html) { document.getElementById('content').innerHTML = html; });
+  }
+</script>

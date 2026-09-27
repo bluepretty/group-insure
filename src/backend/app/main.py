@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.api import auth, audit, benefits, billing, claims, life_events, members, pages, parties, policies, premiums, products, reports, statements
+from app.api import auth, audit, benefits, billing, claims, life_events, members, pages, parties, policies, premiums, products, reports, statements, users
 from app.core.database import engine, Base
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -29,6 +29,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(parties.router)
+app.include_router(users.router)
 app.include_router(products.router)
 app.include_router(policies.router)
 app.include_router(benefits.router)

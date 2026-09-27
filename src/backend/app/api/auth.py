@@ -74,6 +74,7 @@ _ROLE_PERMISSIONS: dict[str, set[str]] = {
     "underwriter": {
         "view_dashboard",
         "manage_parties",
+        "manage_users",
         "view_products",
         "manage_products",
         "view_policies",
