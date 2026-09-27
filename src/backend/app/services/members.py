@@ -5,10 +5,12 @@ index (uq_member_policy_number) added in the model.
 """
 import datetime as dt
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.models.member import Member
+from app.models.member_benefit import MemberBenefit
 from app.models.policy import Policy
+from app.models.claim import Claim
 from app.services.audit import record_log
 
 
@@ -84,6 +86,50 @@ def enroll_member(
         details=f"policy_id={policy_id}",
     )
     return member
+
+
+def update_member(
+    db,
+    *,
+    member: Member,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    relationship: str | None = None,
+) -> Member:
+    """Update a member's mutable profile fields.
+
+    Nothing is committed here so the caller can bundle the write with an audit
+    log in one transaction.
+    """
+    if first_name is not None:
+        member.first_name = first_name
+    if last_name is not None:
+        member.last_name = last_name
+    if relationship is not None:
+        member.relationship = relationship or None
+    return member
+
+
+def member_usage(db, member_id: int) -> dict:
+    """Counts of rows that would be orphaned if ``member_id`` were soft-deleted.
+
+    A member's row is referenced by its own claims and by the single
+    MemberBenefit election it holds. ``{"ok": True}`` means it is safe to mark
+    the member inactive.
+    """
+    claims = db.scalar(
+        select(func.count()).select_from(Claim).where(Claim.member_id == member_id)
+    )
+    elections = db.scalar(
+        select(func.count())
+        .select_from(MemberBenefit)
+        .where(MemberBenefit.member_id == member_id)
+    )
+    return {
+        "ok": claims == 0 and elections == 0,
+        "claims": claims,
+        "elections": elections,
+    }
 
 
 def terminate_member(

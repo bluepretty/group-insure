@@ -22,7 +22,9 @@ def per_member_premium(db, member_id: int) -> Decimal:
         select(MemberBenefit).where(MemberBenefit.member_id == member_id)
     )
     if election is None:
-        raise ValueError(f"Unknown member_id: {member_id}")
+        # A member with no benefit election contributes zero premium; callers
+        # (census removal, proration) expect 0, not a ValueError.
+        return Decimal(0)
     benefit = db.get(Benefit, election.benefit_id)
     if benefit is None:
         raise ValueError(f"Unknown benefit_id: {election.benefit_id}")

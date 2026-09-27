@@ -6,14 +6,18 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.auth import User, require_role
+from app.api.auth import User, _has_permission, require_role
 from app.core.database import get_db
+from app.models.member import Member
+from app.services.audit import record_log
 from app.services.benefits import list_benefits
 from app.services.census import census_add, census_remove
 from app.services.members import (
     enroll_member,
     list_members,
     terminate_member,
+    update_member,
+    member_usage,
 )
 from app.services.policies import list_policies
 from app.view import templates
@@ -59,8 +63,59 @@ def member_list(
             "policies": list_policies(db),
             "benefits": list_benefits(db),
             "today": dt.date.today(),
+            "manage_members": _has_permission(user, "manage_members"),
         },
     )
+
+
+@router.get("/{member_id}")
+def get_member_endpoint(
+    member_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_role("view_members")),
+) -> JSONResponse:
+    """Return one member as JSON so the edit modal can pre-fill its fields."""
+    target = db.get(Member, member_id)
+    if not target:
+        return JSONResponse(status_code=404, content={"detail": "Member not found"})
+    return JSONResponse(
+        content={
+            "id": target.id,
+            "first_name": target.first_name,
+            "last_name": target.last_name,
+            "relationship": target.relationship or "",
+        }
+    )
+
+
+@router.put("/{member_id}")
+def edit_member(
+    member_id: int,
+    request: Request,
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    relationship: str | None = Form(None),
+    db: Session = Depends(get_db),
+    _: None = Depends(require_role("manage_members")),
+) -> JSONResponse:
+    target = db.get(Member, member_id)
+    if not target:
+        return JSONResponse(status_code=404, content={"detail": "Member not found"})
+    update_member(
+        db,
+        member=target,
+        first_name=first_name,
+        last_name=last_name,
+        relationship=relationship or None,
+    )
+    record_log(
+        db,
+        action="member_edit",
+        actor_id=None,
+        entity="Member",
+        entity_id=target.id,
+    )
+    return JSONResponse(content={"id": target.id, "first_name": target.first_name})
 
 
 @router.post("/create")
@@ -175,6 +230,22 @@ def member_remove(
     """
     effective = dt.date.fromisoformat(effective_date) if effective_date else dt.date.today()
     try:
+        # In-use guard: a member that has open claims or a benefit election
+        # cannot be removed without orphaning those rows.
+        usage = member_usage(db, member_id)
+        if not usage["ok"]:
+            reasons = []
+            if usage["claims"]:
+                reasons.append(f"{usage['claims']} claim(s)")
+            if usage["elections"]:
+                reasons.append(f"{usage['elections']} benefit election(s)")
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": "Cannot remove member: " + ", ".join(reasons)
+                    + " reference it."
+                },
+            )
         summary = census_remove(db, member_id=member_id, effective_date=effective)
     except ValueError as exc:
         return templates.TemplateResponse(
