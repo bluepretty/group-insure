@@ -46,11 +46,26 @@ app.include_router(statements.router)
 # Domain errors (ValueError raised by service/business logic) should surface as
 # a clean 400 rather than leaking as an unhandled 500, so clients get a stable,
 # structured error. Genuine bugs (TypeError, KeyError, DB/IntegrityError) are
-# intentionally *not* caught here and still reach FastAPI's default 500 handler.
+# intentionally *not* suppressed: they still raise, return 500, and are logged,
+# so we never mask them as a success. We only change the *response body* from
+# FastAPI's default HTML page into structured JSON so the htmx banner (which
+# parses JSON) can show a readable message instead of raw HTML.
 @app.exception_handler(ValueError)
 async def _handle_value_error(request, exc: ValueError):
     return JSONResponse(
         status_code=400, content={"detail": str(exc) or "Validation error"}
+    )
+
+
+@app.exception_handler(Exception)
+async def _handle_unexpected(request, exc: Exception):
+    # Log the traceback (preserves debugging) but return a JSON body so clients
+    # don't get FastAPI's default HTML 500 page.
+    logging.exception("Unhandled exception on %s", request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers={"X-Exception": type(exc).__name__},
     )
 
 
