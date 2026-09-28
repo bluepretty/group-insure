@@ -9,13 +9,35 @@ from app.core.database import engine, SessionLocal, Base
 from app.main import app
 from app.models.invoice import Invoice
 from app.models.policy import Policy
-from app.models.user import User
+from app.models.user import User, hash_password
 
 
 def setup_test_db():
     # Start from a clean slate so the fixed test users can be registered on every run.
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+
+
+# `register` refuses the "admin" role, so the super-admin that drives the
+# catalog writes (product/benefit create) is seeded directly via the same path
+# the reset service uses, then logged in for a JWT.
+_ADMIN_TOKEN_CACHE = {"value": None}
+
+
+def _admin_token() -> str:
+    if _ADMIN_TOKEN_CACHE["value"] is None:
+        admin = "testadmin"
+        db = SessionLocal()
+        try:
+            db.add(User(username=admin, password=hash_password("secret123"), roles="admin", active=True))
+            db.commit()
+        finally:
+            db.close()
+        login = TestClient(app)
+        r = login.post("/api/auth/login", json={"username": admin, "password": "secret123"})
+        assert r.status_code == 200, r.text
+        _ADMIN_TOKEN_CACHE["value"] = r.json()["access_token"]
+    return _ADMIN_TOKEN_CACHE["value"]
 
 
 def _card_markup(html: str) -> str:
@@ -64,11 +86,14 @@ def test_smoke():
     r = client.post("/api/auth/login", json={"username": "testunderwriter", "password": "wrong"})
     assert r.status_code == 401
 
-    # Create a product
+    # Create a product. Products are catalog/reference data, so catalog writes
+    # require the super-admin (manage_products); the underwriter only owns the
+    # business side (policies, members, claims).
+    admin = _admin_token()
     r = client.post(
         "/api/products/create",
         data={"name": "Group Term Life", "product_type": "group-term-life", "description": "Base plan"},
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {admin}"},
     )
     assert r.status_code == 200, r.text
 
@@ -200,8 +225,9 @@ def test_smoke():
 
     # --- Stage 4: benefits + member elections ---
 
-    # Add a benefit to the product (underwriter / manage_benefits). Include a
-    # catalog per-unit premium rate of 0.10.
+    # Add a benefit to the product. Benefits are catalog/reference data, so
+    # adding one needs the super-admin (manage_benefits); the underwriter only
+    # reads benefits (view_benefits), not write them.
     r = client.post(
         "/api/benefits/add",
         data={
@@ -212,7 +238,7 @@ def test_smoke():
             "coverage_amount": "100000",
             "premium_rate": "0.10",
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {admin}"},
     )
     assert r.status_code == 200, r.text
 
@@ -271,11 +297,12 @@ def test_smoke():
 
     # --- Stage 5: premium pricing + allocation ---
 
-    # Set a per-unit premium rate on the benefit (0.10).
+    # Set a per-unit premium rate on the benefit (0.10). Updating a benefit's
+    # catalog rate is a manage_benefits action, so the super-admin does it.
     r = client.post(
         "/api/premiums/rate",
         data={"benefit_id": str(benefit_id), "premium_rate": "0.10"},
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {admin}"},
     )
     assert r.status_code == 200, r.text
     assert r.json()["premium_rate"] == 0.10
@@ -988,7 +1015,8 @@ def test_smoke():
     assert policy12.end_date == _d12.date(2026, 12, 31), policy12.end_date
     change_policy_status(policy12_db, policy_id=policy12_id, to_status="active")
 
-    # A benefit for the same product so the added member gets a premium.
+    # A benefit for the same product so the added member gets a premium. Benefits
+    # are catalog data, so this add needs the super-admin (manage_benefits).
     r = client.post(
         "/api/benefits/add",
         data={
@@ -999,7 +1027,7 @@ def test_smoke():
             "coverage_amount": "100000",
             "premium_rate": "0.10",
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {admin}"},
     )
     assert r.status_code == 200, r.text
     r = client.get(
@@ -1130,7 +1158,8 @@ def test_smoke():
     policy13_id = policy13.id
     change_policy_status(policy13_db, policy_id=policy13_id, to_status="active")
 
-    # Create a benefit on the product and elect a member into it.
+    # Create a benefit on the product and elect a member into it. Benefits are
+    # catalog data, so the add needs the super-admin (manage_benefits).
     r = client.post(
         "/api/benefits/add",
         data={
@@ -1141,7 +1170,7 @@ def test_smoke():
             "coverage_amount": "100000",
             "premium_rate": "0.10",
         },
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {admin}"},
     )
     assert r.status_code == 200, r.text
     r = client.get(

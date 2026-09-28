@@ -22,6 +22,7 @@ from app.models.benefit import Benefit
 from app.models.claim import Claim
 from app.models.member import Member
 from app.models.policy import Policy
+from app.enums import ClaimStatus, validate_transition
 from app.services.audit import record_log
 
 # Claim numbers (e.g. "CLM-1", "CLM-2") are derived from the database rather
@@ -46,16 +47,6 @@ def _next_claim_number(db: Session) -> str:
         if m:
             highest = int(m.group(1))
     return f"CLM-{highest + 1}"
-
-
-# Valid transitions for each claim status. ``approved`` and ``rejected`` are
-# both decision states; ``paid`` is terminal; ``rejected`` is terminal.
-_TRANSITIONS: dict[str, set[str]] = {
-    "submitted": {"approved", "rejected"},
-    "approved": {"paid"},
-    "rejected": set(),
-    "paid": set(),
-}
 
 
 def list_claims(
@@ -193,11 +184,11 @@ def update_claim_status(
     """
     claim = get_claim(db, claim_id)
 
-    if status not in _TRANSITIONS.get(claim.status, set()):
-        raise ValueError(
-            f"Cannot move claim #{claim.claim_number} "
-            f"(is '{claim.status}') to '{status}'"
-        )
+    if status not in ClaimStatus.ALL:
+        raise ValueError(f"Unknown claim status: {status!r}")
+    validate_transition(
+        claim.status, status, ClaimStatus.TRANSITIONS
+    )
 
     if status == "approved":
         if amount_approved is None or amount_approved <= 0:

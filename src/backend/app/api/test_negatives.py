@@ -108,6 +108,44 @@ class Env:
         self._party_id = None
         self._policy_id = None
         self._member_id = None
+        self._admin_token_cache = None  # super-admin (admin-role) JWT, created on demand
+
+    def _admin_token(self) -> str:
+        """JWT for the super-admin (``admin``) role, created and cached on demand.
+
+        ``register`` refuses the ``admin`` role, so seed the row directly via the
+        same path the reset service uses (``SessionLocal`` + ``hash_password``)
+        and then log in. The fixture's default account is an ``underwriter`` whose
+        permission set deliberately excludes ``manage_products`` — a system-level
+        privilege the super-user owns — so product-catalog writes must run as this
+        admin; every business operation (party/policy/member/renew/claim) stays
+        under the underwriter below.
+        """
+        from app.core.database import SessionLocal
+        from app.models.user import User, hash_password
+
+        if self._admin_token_cache is None:
+            admin = _unique("admin")
+            db = SessionLocal()
+            try:
+                db.add(
+                    User(
+                        username=admin,
+                        password=hash_password("secret123"),
+                        roles="admin",
+                        active=True,
+                    )
+                )
+                db.commit()
+            finally:
+                db.close()
+            r = self.client.post(
+                "/api/auth/login",
+                json={"username": admin, "password": "secret123"},
+            )
+            assert r.status_code == 200, r.text
+            self._admin_token_cache = r.json()["access_token"]
+        return self._admin_token_cache
 
     def _register(self, username: str, roles: str = "underwriter") -> None:
         # Idempotent: a fresh DB per test means the first register always
@@ -144,14 +182,17 @@ class Env:
     @property
     def product_id(self) -> int:
         if self._product_id is None:
+            # Creating a product is a system-catalog write (``manage_products``),
+            # a super-user privilege the fixture's underwriter lacks; run it as
+            # the admin so the rest of the fixture's business graph can be built.
             r = self.client.post(
                 "/api/products/create",
                 data={"name": "Group Term Life", "product_type": "group-term-life", "description": ""},
-                headers={"Authorization": f"Bearer {self.token}"},
+                headers={"Authorization": f"Bearer {self._admin_token()}"},
             )
             assert r.status_code == 200, r.text
             rows = self.client.get(
-                "/api/products", headers={"Authorization": f"Bearer {self.token}"}
+                "/api/products", headers={"Authorization": f"Bearer {self._admin_token()}"}
             ).json()
             assert rows, "no products returned"
             self._product_id = rows[0]["id"]
@@ -317,7 +358,7 @@ def test_product_requires_name():
     r = env.client.post(
         "/api/products/create",
         data={"name": "", "product_type": "group-term-life", "description": ""},
-        headers={"Authorization": f"Bearer {env.token}"},
+        headers={"Authorization": f"Bearer {env._admin_token()}"},
     )
     # A missing required form field is a client validation error (422), not a
     # server error (500) or a custom 400.

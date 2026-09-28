@@ -37,7 +37,7 @@ def _product_id(env: Env, token: str, name: str) -> int:
 
 def test_edit_product_persists():
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     name = _unique("Product")
     # Create a product.
     r = env.client.post(
@@ -66,7 +66,7 @@ def test_edit_product_persists():
 
 def test_edit_invalid_product_is_400():
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     name = _unique("Product")
     env.client.post(
         "/api/products/create",
@@ -85,7 +85,7 @@ def test_edit_invalid_product_is_400():
 
 def test_clean_soft_delete_hides_product():
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     name = _unique("Product")
     env.client.post(
         "/api/products/create",
@@ -106,7 +106,7 @@ def test_clean_soft_delete_hides_product():
 
 def test_deactivate_product_in_use_is_409():
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     name = _unique("Product")
     env.client.post(
         "/api/products/create",
@@ -130,7 +130,7 @@ def test_deactivate_product_in_use_is_409():
 
 def test_broker_cannot_edit_or_delete_product():
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     name = _unique("Product")
     env.client.post(
         "/api/products/create",

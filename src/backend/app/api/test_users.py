@@ -47,15 +47,19 @@ def _user_id(env: Env, admin_token: str, username: str) -> int:
 
 
 def _me(env: Env, admin_token: str) -> int:
-    """The id of the env's own (admin) user."""
-    return _user_id(env, admin_token, env.username)
+    """The id of the admin user making the call (self), for the 'cannot delete
+    your own account' guard. Resolved from /me so it is always the caller's own
+    id rather than a username we have to look up."""
+    r = env.client.get("/api/auth/me", headers={"Authorization": f"Bearer {admin_token}"})
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
 
 
 # --- Edit ------------------------------------------------------------------ #
 def test_edit_roles_and_email_persist():
     """Editing a user's roles and email over the API actually persists."""
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     target_username = _unique("editee")
     env.login_token(target_username, roles="underwriter")
 
@@ -78,7 +82,7 @@ def test_edit_roles_and_email_persist():
 def test_edit_invalid_role_is_400():
     """A caller-supplied role outside the allow-list is rejected, not applied."""
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     target_username = _unique("editee")
     env.login_token(target_username, roles="underwriter")
     target_id = _user_id(env, admin, target_username)
@@ -94,7 +98,7 @@ def test_edit_invalid_role_is_400():
 def test_set_short_password_is_400():
     """A password shorter than 8 characters is rejected by the set-password route."""
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     target_username = _unique("editee")
     env.login_token(target_username, roles="underwriter")
     target_id = _user_id(env, admin, target_username)
@@ -110,7 +114,7 @@ def test_set_short_password_is_400():
 def test_set_password_then_login():
     """Setting a password lets the user log in with it (proves the hash persisted)."""
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     target_username = _unique("editee")
     env.login_token(target_username, roles="underwriter")
     target_id = _user_id(env, admin, target_username)
@@ -137,7 +141,7 @@ def test_set_password_then_login():
 def test_clean_delete_returns_ok_and_removes_user():
     """A user with no in-use rows is deleted and a subsequent get returns 404."""
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     target_username = _unique("victim")
     env.login_token(target_username, roles="underwriter")
     target_id = _user_id(env, admin, target_username)
@@ -158,7 +162,7 @@ def test_clean_delete_returns_ok_and_removes_user():
 def test_delete_user_with_policy_is_409():
     """A user who underwrites a policy cannot be deleted (409 with a reason)."""
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     target_username = _unique("victim")
     env.login_token(target_username, roles="underwriter")
     target_id = _user_id(env, admin, target_username)
@@ -199,7 +203,7 @@ def test_delete_user_with_policy_is_409():
 # --- Delete: self / not found ---------------------------------------------- #
 def test_delete_own_account_is_400():
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     r = env.client.delete(
         f"/api/users/{_me(env, admin)}",
         headers={"Authorization": f"Bearer {admin}"},
@@ -210,7 +214,7 @@ def test_delete_own_account_is_400():
 
 def test_delete_unknown_is_404():
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     r = env.client.delete(
         "/api/users/999999", headers={"Authorization": f"Bearer {admin}"}
     )
@@ -221,7 +225,7 @@ def test_delete_unknown_is_404():
 def test_broker_cannot_manage_users():
     """A broker is refused (403) on every ``manage_users``-gated route."""
     env = Env()
-    admin = env.login_token()
+    admin = env._admin_token()
     broker = env.login_token("broker2", roles="broker")
     headers = {"Authorization": f"Bearer {broker}"}
 
