@@ -32,7 +32,7 @@ def _add_effect(
     first_name: str,
     last_name: str,
     effective_date: dt.date,
-    relationship: str | None,
+    relationship_code: str | None,
     benefit_id: int | None,
     election_amount: float | None,
     actor_id: int | None,
@@ -49,7 +49,7 @@ def _add_effect(
         member_number=member_number,
         first_name=first_name,
         last_name=last_name,
-        relationship=relationship or None,
+        relationship_code=relationship_code,
         effective_date=effective_date,
     )
     premium = 0.0
@@ -70,7 +70,7 @@ def census_add(
     first_name: str,
     last_name: str,
     effective_date: dt.date,
-    relationship: str | None = None,
+    relationship_code: str | None = None,
     benefit_id: int | None = None,
     election_amount: float | None = None,
     actor_id: int | None = None,
@@ -92,9 +92,11 @@ def census_add(
                 "changes require an active policy"
             )
 
-        event_type = "new_dependent" if (relationship or "").lower().startswith(
-            ("spouse", "child", "dependent")
-        ) else "new_member"
+        is_dependent = (
+            relationship_code is not None
+            and relationship_code.lower().startswith(("spouse", "child", "dependent"))
+        )
+        event_type = "new_dependent" if is_dependent else "new_member"
 
         member, added_premium = _add_effect(
             db,
@@ -103,7 +105,7 @@ def census_add(
             first_name=first_name,
             last_name=last_name,
             effective_date=effective_date,
-            relationship=relationship,
+            relationship_code=relationship_code,
             benefit_id=benefit_id,
             election_amount=election_amount,
             actor_id=actor_id,
@@ -187,7 +189,9 @@ def census_remove(
 
         event_type = (
             "dependent_departed"
-            if (member.relationship or "").lower().startswith(("spouse", "child", "dependent"))
+            if (member.relationship_code or "").lower().startswith(
+                ("spouse", "child", "dependent")
+            )
             else "member_departed"
         )
 

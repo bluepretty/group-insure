@@ -8,6 +8,7 @@ import datetime as dt
 
 from sqlalchemy import select
 
+from app.enums import InvoiceStatus, PaymentStatus, PolicyStatus
 from app.models.invoice import Invoice
 from app.models.payment import Payment
 from app.models.policy import Policy
@@ -37,7 +38,10 @@ def get_payment(db, payment_id: int) -> Payment | None:
 def _total_posted(db, invoice_id: int) -> float:
     payments = db.scalars(
         select(Payment)
-        .where(Payment.invoice_id == invoice_id, Payment.status == "posted")
+        .where(
+            Payment.invoice_id == invoice_id,
+            Payment.status == PaymentStatus.POSTED,
+        )
     ).all()
     return sum(p.amount or 0 for p in payments)
 
@@ -79,7 +83,7 @@ def record_payment(
     db.flush()
     _reconcile(db, invoice)
     db.commit()
-    if invoice.status == "paid" and invoice.policy_id is not None:
+    if invoice.status == InvoiceStatus.PAID and invoice.policy_id is not None:
         # Reinstating a lapsed policy is the natural effect of full payment.
         # Only the lapsed → active transition is a real change; an active
         # policy that simply pays its invoice stays active.

@@ -31,7 +31,7 @@ def _create_member(
     member_number: str | None = None,
     first_name: str = "Alex",
     last_name: str = "Doe",
-    relationship: str = "self",
+    relationship_code: str = "self",
 ) -> int:
     member_number = member_number or f"MEM-{_unique('n')}"
     r = env.client.post(
@@ -42,7 +42,7 @@ def _create_member(
             "member_number": member_number,
             "first_name": first_name,
             "last_name": last_name,
-            "relationship": relationship,
+            "relationship_code": relationship_code,
         },
         headers={"Authorization": f"Bearer {admin}"},
     )
@@ -73,7 +73,7 @@ def test_edit_member_persists():
 
     r = env.client.put(
         f"/api/members/{mid}",
-        data={"first_name": "Alicia", "last_name": "Changed", "relationship": "spouse"},
+        data={"first_name": "Alicia", "last_name": "Changed", "relationship_code": "spouse"},
         headers={"Authorization": f"Bearer {admin}"},
     )
     assert r.status_code == 200, r.text
@@ -82,7 +82,7 @@ def test_edit_member_persists():
     target = _member(env, admin, mn)
     assert target["first_name"] == "Alicia"
     assert target["last_name"] == "Changed"
-    assert target["relationship"] == "spouse"
+    assert target["relationship_code"] == "spouse"
 
 
 def test_edit_member_unknown_is_404():
@@ -163,7 +163,7 @@ def test_remove_member_with_claim_is_409():
             member_number=f"MEM-claim-{_unique('n')}",
             first_name="Lit",
             last_name="igant",
-            relationship="self",
+            relationship_code="self",
         )
         db.add(member)
         db.flush()
@@ -219,7 +219,7 @@ def test_remove_member_with_election_is_409():
             member_number=f"MEM-elec-{_unique('n')}",
             first_name="E",
             last_name="lectee",
-            relationship="self",
+            relationship_code="self",
         )
         db.add(member)
         db.flush()

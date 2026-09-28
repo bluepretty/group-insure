@@ -12,6 +12,7 @@ from app.models.member import Member
 from app.services.audit import record_log
 from app.services.benefits import list_benefits
 from app.services.census import census_add, census_remove
+from app.services.lookup import list_lookup
 from app.services.members import (
     enroll_member,
     list_members,
@@ -33,7 +34,9 @@ class MemberModel(BaseModel):
     first_name: str
     last_name: str
     status: str
-    relationship: str | None = None
+    relationship_code: str | None = None
+    position_code: str | None = None
+    annual_salary: float | None = None
 
 
 @router.get("", response_model=list[MemberModel])
@@ -62,6 +65,8 @@ def member_list(
             "members": members,
             "policies": list_policies(db),
             "benefits": list_benefits(db),
+            "relationships": list_lookup(db, "relationships"),
+            "positions": list_lookup(db, "positions"),
             "today": dt.date.today(),
             "manage_members": _has_permission(user, "manage_members"),
         },
@@ -83,7 +88,9 @@ def get_member_endpoint(
             "id": target.id,
             "first_name": target.first_name,
             "last_name": target.last_name,
-            "relationship": target.relationship or "",
+            "relationship_code": target.relationship_code or "",
+            "position_code": target.position_code or "",
+            "annual_salary": float(target.annual_salary) if target.annual_salary is not None else None,
         }
     )
 
@@ -94,7 +101,9 @@ def edit_member(
     request: Request,
     first_name: str = Form(...),
     last_name: str = Form(...),
-    relationship: str | None = Form(None),
+    relationship_code: str | None = Form(None),
+    position_code: str | None = Form(None),
+    annual_salary: float | None = Form(None),
     db: Session = Depends(get_db),
     _: None = Depends(require_role("manage_members")),
 ) -> JSONResponse:
@@ -106,7 +115,9 @@ def edit_member(
         member=target,
         first_name=first_name,
         last_name=last_name,
-        relationship=relationship or None,
+        relationship_code=relationship_code or None,
+        position_code=position_code or None,
+        annual_salary=annual_salary,
     )
     record_log(
         db,
@@ -115,7 +126,16 @@ def edit_member(
         entity="Member",
         entity_id=target.id,
     )
-    return JSONResponse(content={"id": target.id, "first_name": target.first_name})
+    return JSONResponse(
+        content={
+            "id": target.id,
+            "first_name": target.first_name,
+            "last_name": target.last_name,
+            "relationship_code": target.relationship_code or "",
+            "position_code": target.position_code or "",
+            "annual_salary": float(target.annual_salary) if target.annual_salary is not None else None,
+        }
+    )
 
 
 @router.post("/create")
@@ -123,10 +143,13 @@ def member_create(
     request: Request,
     policy_id: int = Form(...),
     party_id: int | None = Form(None),
+    organization_id: int | None = Form(None),
     member_number: str = Form(...),
     first_name: str = Form(...),
     last_name: str = Form(...),
-    relationship: str = Form(""),
+    relationship_code: str | None = Form(None),
+    position_code: str | None = Form(None),
+    annual_salary: float | None = Form(None),
     db: Session = Depends(get_db),
     _: None = Depends(require_role("manage_members")),
 ) -> HTMLResponse:
@@ -135,10 +158,13 @@ def member_create(
             db,
             policy_id=policy_id,
             party_id=party_id,
+            organization_id=organization_id,
             member_number=member_number,
             first_name=first_name,
             last_name=last_name,
-            relationship=relationship or None,
+            relationship_code=relationship_code or None,
+            position_code=position_code or None,
+            annual_salary=annual_salary,
         )
     except ValueError as exc:
         # Surface a friendly message back into the partial rather than a 500.
@@ -176,7 +202,9 @@ def member_add(
     member_number: str = Form(...),
     first_name: str = Form(...),
     last_name: str = Form(...),
-    relationship: str = Form(""),
+    relationship_code: str | None = Form(None),
+    position_code: str | None = Form(None),
+    annual_salary: float | None = Form(None),
     benefit_id: int | None = Form(None),
     election_amount: float | None = Form(None),
     effective_date: str = Form(""),
@@ -198,7 +226,7 @@ def member_add(
             first_name=first_name,
             last_name=last_name,
             effective_date=effective,
-            relationship=relationship or None,
+            relationship_code=relationship_code or None,
             benefit_id=benefit_id,
             election_amount=election_amount,
         )

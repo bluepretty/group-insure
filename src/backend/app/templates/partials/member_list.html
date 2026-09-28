@@ -34,7 +34,25 @@
         </div>
         <div class="col-sm-2">
           <label class="form-label mb-1 small">Relationship</label>
-          <input type="text" class="form-control" name="relationship" placeholder="self/spouse/dependent">
+          <select class="form-select" name="relationship_code">
+            <option value="">— None —</option>
+            {% for option in relationships %}
+            <option value="{{ option.code }}">{{ option.name }}</option>
+            {% else %}
+            <option value disabled>No relationships — add one first</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label mb-1 small">Position</label>
+          <select class="form-select" name="position_code">
+            <option value="">— None —</option>
+            {% for option in positions %}
+            <option value="{{ option.code }}">{{ option.name }}</option>
+            {% else %}
+            <option value disabled>No positions — add one first</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="col-sm-2">
           <label class="form-label mb-1 small">Effective date</label>
@@ -72,7 +90,7 @@
     </span>
     <span class="d-flex align-items-center gap-2">
       <span class="badge bg-secondary rounded-pill">{{ member.status }}</span>
-      {% if member.relationship %}<span class="badge bg-light text-dark">{{ member.relationship }}</span>{% endif %}
+      {% if member.relationship_code %}<span class="badge bg-light text-dark">{{ member.relationship_code }}</span>{% endif %}
       {% if manage_members %}
       <button
         type="button"
@@ -129,7 +147,29 @@
         </div>
         <div class="mb-3">
           <label class="form-label mb-1 small">Relationship</label>
-          <input type="text" class="form-control" name="relationship" id="edit-member-relationship" value="" placeholder="self/spouse/dependent">
+          <select class="form-select" name="relationship_code" id="edit-member-relationship-code">
+            <option value="">— None —</option>
+            {% for option in relationships %}
+            <option value="{{ option.code }}">{{ option.name }}</option>
+            {% else %}
+            <option value disabled>No relationships — add one first</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label mb-1 small">Position</label>
+          <select class="form-select" name="position_code" id="edit-member-position-code">
+            <option value="">— None —</option>
+            {% for option in positions %}
+            <option value="{{ option.code }}">{{ option.name }}</option>
+            {% else %}
+            <option value disabled>No positions — add one first</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label mb-1 small">Annual salary</label>
+          <input type="number" step="0.01" class="form-control" name="annual_salary" id="edit-member-annual-salary">
         </div>
       </div>
       <div class="modal-footer">
@@ -174,15 +214,19 @@
   })();
 
   // Populate the modal inputs when the Edit button's after-request returns the
-  // member (the hx-get call above). Relationship is optional, so '' is allowed.
-  function populateEditModal(el, id, first_name, last_name, relationship) {
+  // member. Relationship and position are lookup codes, so '' is allowed.
+  function populateEditModal(el, id, first_name, last_name, relationship_code, position_code, annual_salary) {
     var modalEl = document.getElementById('edit-member-modal');
     var form = document.getElementById('edit-member-form');
     form.dataset.memberId = id;
     document.getElementById('edit-member-id').value = id;
     document.getElementById('edit-member-first').value = first_name || '';
     document.getElementById('edit-member-last').value = last_name || '';
-    document.getElementById('edit-member-relationship').value = relationship || '';
+    var relSelect = document.getElementById('edit-member-relationship-code');
+    relSelect.value = relationship_code || '';
+    var posSelect = document.getElementById('edit-member-position-code');
+    posSelect.value = position_code || '';
+    document.getElementById('edit-member-annual-salary').value = annual_salary !== undefined && annual_salary !== '' ? annual_salary : '';
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
   }
 

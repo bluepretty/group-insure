@@ -68,22 +68,58 @@ def require_user(user: User = Depends(get_current_user)) -> User:
     return user
 
 
-# Role -> permissions map. Adding a permission or a new role here is all that's
-# required; call sites only reference permissions via require_role().
+def require_admin(user: User = Depends(require_user)) -> User:
+    """Super-user only. Succeeds for the ``admin`` (super-user) role and refuses
+    both underwriters and brokers with a 403.
+
+    The super-user is the sole system-level account — it alone manages users and
+    the reference/lookup tables. Business users (``underwriter``) and ``broker``
+    are refused. Implemented as "must hold ``manage_users``", the one permission
+    the super-user holds and no business role does.
+    """
+    if not _has_permission(user, "manage_users"):
+        raise HTTPException(
+            status_code=403, detail="Requires super-admin (admin) role"
+        )
+    return user
+
+
+_ADMIN_PERMISSIONS = {
+    "view_dashboard",
+    "manage_parties",
+    "manage_references",
+    "manage_users",
+    "view_products",
+    "manage_products",
+    "view_policies",
+    "manage_policies",
+    "manage_claims",
+    "view_members",
+    "manage_members",
+    "view_benefits",
+    "manage_benefits",
+    "view_premiums",
+    "manage_premiums",
+    "view_billing",
+    "manage_billing",
+    "view_claims",
+}
+
 _ROLE_PERMISSIONS: dict[str, set[str]] = {
+    "admin": set(_ADMIN_PERMISSIONS),
     "underwriter": {
         "view_dashboard",
+        # Owns its clients (parties) but never system catalog: it reads products
+        # and benefits (view_), it cannot create or edit them (manage_*), and it
+        # has no user-management access. Reference-data writes are the super-user's.
         "manage_parties",
-        "manage_users",
         "view_products",
-        "manage_products",
         "view_policies",
         "manage_policies",
         "manage_claims",
         "view_members",
         "manage_members",
         "view_benefits",
-        "manage_benefits",
         "view_premiums",
         "manage_premiums",
         "view_billing",

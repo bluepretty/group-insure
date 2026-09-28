@@ -11,6 +11,7 @@ import re
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.enums import InvoiceStatus
 from app.models.invoice import Invoice
 from app.models.payment import Payment
 from app.models.policy import Policy
@@ -86,12 +87,12 @@ def _reconcile_invoice(db, invoice: Invoice) -> Invoice:
     if invoice.total_amount is None:
         return invoice
     if invoice.paid_amount == 0:
-        invoice.status = "issued"
+        invoice.status = InvoiceStatus.ISSUED
     elif invoice.paid_amount >= invoice.total_amount:
-        invoice.status = "paid"
+        invoice.status = InvoiceStatus.PAID
         invoice.paid_date = dt.datetime.now(dt.timezone.utc)
     else:
-        invoice.status = "partially_paid"
+        invoice.status = InvoiceStatus.PARTIALLY_PAID
     return invoice
 
 

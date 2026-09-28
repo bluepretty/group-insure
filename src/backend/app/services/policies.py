@@ -7,24 +7,17 @@ import datetime as dt
 
 from sqlalchemy import select
 
+from app.enums import PolicyStatus, validate_transition
 from app.models.policy import Policy
 from app.models.product import Product
 from app.services.audit import record_log
-
-VALID_STATUSES = ("draft", "active", "lapsed", "closed")
+from app.services.lookup import validate_kind_code
 
 # A policy must be lapsed this long before it can be closed.
 GRACE_DAYS = 30
 
-# Allowed status transitions. A policy can move forward from "draft" to
-# "active"; a non-paying policy lapses and can be reinstated or closed; once
-# "closed" a policy is terminal. "active" -> "draft" is not allowed.
-_ALLOWED: dict[str, set[str]] = {
-    "draft": {"active"},
-    "active": {"lapsed"},
-    "lapsed": {"active", "closed"},
-    "closed": set(),
-}
+# Policy lifecycle values and legal transitions, sourced from app.enums so the
+# value set has one definition the routes, models, and tests all check against.
 
 
 
@@ -86,16 +79,18 @@ def add_policy(
 
 
 def change_policy_status(db, policy_id: int, to_status: str) -> Policy:
-    if to_status not in VALID_STATUSES:
+    if to_status not in PolicyStatus.ALL:
         raise ValueError(f"Invalid status: {to_status!r}")
+    # The value set is also table-backed (see services.lookup): an unknown status
+    # cannot be written even if it somehow matches the enum set, and a
+    # deactivated status cannot be transitioned into.
+    validate_kind_code(db, "policy_statuses", to_status)
     policy = db.get(Policy, policy_id)
     if policy is None:
         raise ValueError(f"Unknown policy_id: {policy_id}")
-    allowed = _ALLOWED.get(policy.status, set())
-    if to_status not in allowed:
-        raise ValueError(
-            f"Cannot move policy {policy.status!r} -> {to_status!r}"
-        )
+    validate_transition(
+        policy.status, to_status, PolicyStatus.TRANSITIONS
+    )
     policy.status_changed_at = dt.datetime.now(dt.timezone.utc)
     policy.status = to_status
     db.commit()

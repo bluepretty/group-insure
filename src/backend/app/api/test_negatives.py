@@ -54,6 +54,16 @@ def _fresh_test_engine():
     import app.models  # noqa: F401
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    # Seed the reference tables (the TestClient does not drive startup, where
+    # seeding normally happens) so party/policy validation has values to check
+    # against even on this throwaway engine.
+    from app.services.lookup import seed_reference_data
+
+    db = database.SessionLocal()
+    try:
+        seed_reference_data(db)
+    finally:
+        db.close()
     return engine
 
 
@@ -268,7 +278,7 @@ class Env:
                     "member_number": "MEM-001",
                     "first_name": "Alex",
                     "last_name": "Doe",
-                    "relationship": "self",
+                    "relationship_code": "self",
                 },
                 headers={"Authorization": f"Bearer {self.token}"},
             )
@@ -473,7 +483,7 @@ def test_long_member_number_boundary():
             "member_number": "M" * 500,
             "first_name": "A",
             "last_name": "D",
-            "relationship": "self",
+            "relationship_code": "self",
         },
         headers={"Authorization": f"Bearer {env.token}"},
     )

@@ -6,7 +6,7 @@ later.
 """
 import datetime as dt
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship as relationship_relationship
 from sqlalchemy import UniqueConstraint
 
@@ -32,7 +32,22 @@ class Member(Base):
     last_name: Mapped[str] = mapped_column(String(80))
     date_of_birth: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     gender: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    relationship: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # ForeignKey into relationships.code — a member's kinship to the policyholder
+    # (``self``, ``spouse`` …). Replaces the former free-text ``relationship``
+    # column so the value is a validated lookup code, not free text.
+    relationship_code: Mapped[str | None] = mapped_column(
+        ForeignKey("relationships.code"), nullable=True
+    )
+    # ForeignKey into positions.code — the role a member holds within the
+    # policyholder organization (``staff``, ``director`` …). Used to group
+    # members for reporting.
+    position_code: Mapped[str | None] = mapped_column(
+        ForeignKey("positions.code"), nullable=True
+    )
+    # High-precision monetary figure used by benefit/proration calculations.
+    annual_salary: Mapped[float | None] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
     # "active" | "inactive" | "terminated"
     status: Mapped[str] = mapped_column(String(20), default="active")
     effective_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)

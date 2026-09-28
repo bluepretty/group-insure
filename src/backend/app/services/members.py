@@ -12,6 +12,7 @@ from app.models.member_benefit import MemberBenefit
 from app.models.policy import Policy
 from app.models.claim import Claim
 from app.services.audit import record_log
+from app.services.lookup import validate_kind_code
 
 
 VALID_STATUS = ("active", "inactive", "terminated")
@@ -50,7 +51,9 @@ def enroll_member(
     last_name: str,
     date_of_birth: dt.date | None = None,
     gender: str | None = None,
-    relationship: str | None = None,
+    relationship_code: str | None = None,
+    position_code: str | None = None,
+    annual_salary: float | None = None,
     effective_date: dt.date | None = None,
 ) -> Member:
     policy = db.get(Policy, policy_id)
@@ -64,6 +67,12 @@ def enroll_member(
     )
     if existing is not None:
         raise ValueError(f"Member number '{member_number}' already exists for this policy")
+    # The relationship and position are into lookup tables: refuse a code that
+    # isn't a live value so a member can never point at an unknown row.
+    if relationship_code is not None:
+        validate_kind_code(db, "relationships", relationship_code)
+    if position_code is not None:
+        validate_kind_code(db, "positions", position_code)
     member = Member(
         policy_id=policy_id,
         party_id=party_id,
@@ -73,7 +82,9 @@ def enroll_member(
         last_name=last_name,
         date_of_birth=date_of_birth,
         gender=gender,
-        relationship=relationship,
+        relationship_code=relationship_code,
+        position_code=position_code,
+        annual_salary=annual_salary,
         effective_date=effective_date,
     )
     db.add(member)
@@ -94,7 +105,9 @@ def update_member(
     member: Member,
     first_name: str | None = None,
     last_name: str | None = None,
-    relationship: str | None = None,
+    relationship_code: str | None = None,
+    position_code: str | None = None,
+    annual_salary: float | None = None,
 ) -> Member:
     """Update a member's mutable profile fields.
 
@@ -105,8 +118,14 @@ def update_member(
         member.first_name = first_name
     if last_name is not None:
         member.last_name = last_name
-    if relationship is not None:
-        member.relationship = relationship or None
+    if relationship_code is not None:
+        validate_kind_code(db, "relationships", relationship_code)
+        member.relationship_code = relationship_code
+    if position_code is not None:
+        validate_kind_code(db, "positions", position_code)
+        member.position_code = position_code
+    if annual_salary is not None:
+        member.annual_salary = annual_salary
     return member
 
 

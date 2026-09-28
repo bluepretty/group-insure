@@ -16,6 +16,16 @@ def setup_test_db():
     # Start from a clean slate so the fixed test users can be registered on every run.
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    # Seed the reference tables so party/policy validation (which now checks the
+    # lookup tables) has values to validate against, even though the TestClient
+    # below does not drive the app startup event where seeding normally happens.
+    from app.services.lookup import seed_reference_data
+
+    db = SessionLocal()
+    try:
+        seed_reference_data(db)
+    finally:
+        db.close()
 
 
 # `register` refuses the "admin" role, so the super-admin that drives the
@@ -163,7 +173,7 @@ def test_smoke():
             "member_number": "MEM-001",
             "first_name": "Alex",
             "last_name": "Doe",
-            "relationship": "self",
+            "relationship_code": "self",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -473,7 +483,7 @@ def test_smoke():
             "member_number": "MEM-CLA",
             "first_name": "Claim",
             "last_name": "Member",
-            "relationship": "self",
+            "relationship_code": "self",
         },
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -1047,7 +1057,7 @@ def test_smoke():
         first_name="Census",
         last_name="Add",
         effective_date=eff,
-        relationship="self",
+        relationship_code="self",
         benefit_id=benefit_id12,
         election_amount=100.0,
     )

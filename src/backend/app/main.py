@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.api import auth, audit, benefits, billing, claims, life_events, members, pages, parties, policies, premiums, products, reports, statements, users
+from app.api import auth, audit, benefits, billing, claims, life_events, lookup, members, pages, parties, policies, premiums, products, reports, reset, statements, users
 from app.core.database import engine, Base
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -42,6 +42,8 @@ app.include_router(life_events.router)
 app.include_router(pages.router)
 app.include_router(reports.router)
 app.include_router(statements.router)
+app.include_router(reset.router)
+app.include_router(lookup.router)
 
 
 # Domain errors (ValueError raised by service/business logic) should surface as
@@ -77,6 +79,16 @@ from app import models  # noqa: E402,F401
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    # Seed the reference/lookup tables so the app is usable against a fresh
+    # database (and idempotent on every restart).
+    from app.services.lookup import seed_reference_data
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        seed_reference_data(db)
+    finally:
+        db.close()
 
 
 @app.get("/health")

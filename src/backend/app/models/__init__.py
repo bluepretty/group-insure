@@ -1,6 +1,12 @@
 """Models package — import so each model registers with Base.metadata."""
 from app.models.audit import AuditLog
 from app.models.organization import Organization
+from app.models.lookup import (
+    PartyRole,
+    PartyType,
+    PolicyStatus,
+    party_role_association,
+)
 from app.models.party import Party
 from app.models.policy import Policy
 from app.models.member import Member
@@ -20,6 +26,9 @@ __all__ = [
     "Organization",
     "Party",
     "Policy",
+    "PartyRole",
+    "PartyType",
+    "PolicyStatus",
     "Benefit",
     "Product",
     "User",
