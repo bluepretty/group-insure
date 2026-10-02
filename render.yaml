@@ -16,8 +16,3 @@ services:
         generateValue: true
       - key: GROUP_INSURE_SMTP_ENABLED
         value: false
-  - type: database
-    name: group-insure-db
-    engine: postgres
-    env: postgres
-    plan: free   # free tier; expires after ~90 days, fine for testing
