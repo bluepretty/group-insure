@@ -1,0 +1,22 @@
+# Render one-click deployment definition.
+# https://render.com/docs/spec
+#
+# The app auto-creates its schema (Base.metadata.create_all in main.py) on first
+# boot, so the PostgreSQL service needs no build or schema command.
+services:
+  - type: web
+    name: group-insure
+    env: docker
+    dockerfilePath: ./Dockerfile
+    # Render injects PORT automatically; the Dockerfile binds 0.0.0.0:$PORT.
+    envVars:
+      - key: GROUP_INSURE_DATABASE_URL
+        generateValue: true
+      - key: GROUP_INSURE_JWT_SECRET
+        generateValue: true
+      - key: GROUP_INSURE_SMTP_ENABLED
+        value: false
+  - type: postgres
+    name: group-insure-db
+    env: postgres
+    plan: free   # free tier; expires after ~90 days, fine for testing

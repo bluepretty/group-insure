@@ -114,8 +114,56 @@ cd src/backend
 uv run --extra dev pytest app/api/test_smoke.py
 ```
 
+## Deploy to Render (one click)
+
+Render has a free tier for both the web app and PostgreSQL, so you can run the whole
+stack live in a few minutes. The app auto-creates its schema on first boot, so you
+only need to deploy the repo and point it at the database.
+
+> **Prerequisite:** push this repo to GitHub first (see below). The "Deploy to
+> Render" button links to a GitHub repo.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/<your-org>/group_insure)
+
+Render will spin up:
+
+- **Web Service** — your FastAPI app, built from the `Dockerfile` in this repo.
+- **PostgreSQL (Free tier)** — the production database; the app creates its tables on boot.
+
+### First — push the repo to GitHub
+
+```bash
+# from the repo root, using a new GitHub repo named "group_insure"
+git branch -M main
+git remote add origin https://github.com/<your-username>/group_insure.git
+git push -u origin main
+```
+
+### Second — open the Deploy to Render button
+
+After pushing, replace `<your-org>` in the button URL above with your GitHub
+username and click it. Render imports the repo and opens the deploy page with the
+service and database pre-configured.
+
+Set (or confirm) these **Environment Variables** in the Render UI:
+
+| Variable | Value |
+|---|---|
+| `GROUP_INSURE_DATABASE_URL` | Render sets `GROUP_INSURE_DATABASE_URL` automatically to your new Postgres *Internal Database URL*. |
+| `GROUP_INSURE_JWT_SECRET` | A long random string — generate one with `openssl rand -hex 32`. |
+| `GROUP_INSURE_SMTP_ENABLED` | `false` (only flip to `true` once you add SMTP credentials). |
+
+Click **Deploy** and wait for the service to turn green, then open the app URL and
+register an account.
+
+> **Note:** the button deploys a linked copy of this repo in your Render account.
+> To keep editing your local code, push new commits to GitHub and Render rebuilds
+> automatically — or connect the existing service to this repo's push.
+
 ## Database notes
 
 - SQLite is the default (no setup required) — great for local development.
 - Switching to PostgreSQL requires no code changes; only the `DATABASE_URL` env var.
 - Models use portable SQLAlchemy types, so they work on both databases.
+
+[Back to top](#group-insurance-admin-platform)
