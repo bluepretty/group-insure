@@ -123,7 +123,7 @@ only need to deploy the repo and point it at the database.
 > **Prerequisite:** push this repo to GitHub first (see below). The "Deploy to
 > Render" button links to a GitHub repo.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/<your-org>/group_insure)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/bluepretty/group-insure)
 
 Render will spin up:
 
