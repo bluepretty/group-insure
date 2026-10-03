@@ -78,6 +78,13 @@ from app import models  # noqa: E402,F401
 
 @app.on_event("startup")
 def on_startup() -> None:
+    # Ensure the database is reachable before touching it. Free-tier
+    # providers (e.g. Neon) scale compute to zero and refuse the first
+    # connection after idle; this retries with a backoff instead of
+    # crash-looping.
+    from app.core.database import connect_with_retry
+
+    connect_with_retry()
     Base.metadata.create_all(bind=engine)
     # Seed the reference/lookup tables so the app is usable against a fresh
     # database (and idempotent on every restart).
