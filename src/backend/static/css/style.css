@@ -95,3 +95,33 @@ body {
 .census-summary strong {
   margin-right: 0.25em;
 }
+
+/* --- Login background image ----------------------------------------------- */
+/*
+ * A full-bleed photo on the login page so the first thing users see is the
+ * app's backdrop rather than a plain grey screen. The image is served from
+ * /static/img/park-bg.jpg (a resized, web-friendly copy of a 3–4 MB original)
+ * and softened with a dark overlay so the white login card reads clearly on top.
+ */
+.login-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: url("/static/img/park-bg.jpg") center center / cover no-repeat;
+  z-index: -2;
+}
+
+.login-bg::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 25, 41, 0.45);
+  z-index: -1;
+}
+
+.login-bg .container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
