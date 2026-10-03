@@ -9,6 +9,7 @@ from app.api.auth import User
 from app.core.database import get_db
 from app.models.party import Party
 from app.services.audit import record_log
+from app.services.lookup import list_lookup
 from app.services.parties import add_party, get_party, list_parties, party_usage, update_party
 from app.view import templates
 
@@ -57,7 +58,15 @@ def party_list(request: Request, db: Session = Depends(get_db), _: User = Depend
     return templates.TemplateResponse(
         request,
         "partials/party_list.html",
-        {"parties": parties, "manage_parties": _has_permission(_, "manage_parties")},
+        {
+            "parties": parties,
+            "manage_parties": _has_permission(_, "manage_parties"),
+            # party_type is a union field: legacy role codes live in party_roles,
+            # entity types in party_types. Both feed the "Type" dropdown so it
+            # reflects whatever the admin has configured, not a hard-coded set.
+            "party_roles": list_lookup(db, "party_roles"),
+            "party_types": list_lookup(db, "party_types"),
+        },
     )
 
 

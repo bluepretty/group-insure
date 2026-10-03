@@ -16,6 +16,7 @@ import datetime as dt
 
 from sqlalchemy import Case, func, select
 
+from app.enums import ClaimStatus, MemberStatus, PolicyStatus
 from app.models.benefit import Benefit
 from app.models.claim import Claim
 from app.models.invoice import Invoice
@@ -75,10 +76,10 @@ def build_report(db) -> dict:
         select(
             func.count(Policy.id),
             func.coalesce(
-                func.sum(Case((Policy.status == "active", 1)), else_=0), 0
+                func.sum(Case((Policy.status == PolicyStatus.ACTIVE, 1)), else_=0), 0
             ),
             func.coalesce(
-                func.sum(Case((Policy.status == "lapsed", 1)), else_=0), 0
+                func.sum(Case((Policy.status == PolicyStatus.LAPSED, 1)), else_=0), 0
             ),
         )
     ).one()
@@ -91,7 +92,7 @@ def build_report(db) -> dict:
         select(
             func.count(Member.id),
             func.coalesce(
-                func.sum(Case((Member.status == "active", 1)), else_=0), 0
+                func.sum(Case((Member.status == MemberStatus.ACTIVE, 1)), else_=0), 0
             ),
         )
     ).one()
@@ -109,17 +110,17 @@ def build_report(db) -> dict:
             func.coalesce(
                 func.sum(
                     Case(
-                        ((Claim.status.in_(("submitted", "approved"))), 1),
+                        ((Claim.status.in_((ClaimStatus.SUBMITTED, ClaimStatus.APPROVED))), 1),
                         else_=0,
                     )
                 ),
                 0,
             ),
             func.coalesce(
-                func.sum(Case((Claim.status == "paid", 1)), else_=0), 0
+                func.sum(Case((Claim.status == ClaimStatus.PAID, 1)), else_=0), 0
             ),
             func.coalesce(
-                func.sum(Case((Claim.status == "rejected", 1)), else_=0), 0
+                func.sum(Case((Claim.status == ClaimStatus.REJECTED, 1)), else_=0), 0
             ),
         )
     ).one()
