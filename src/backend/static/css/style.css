@@ -115,7 +115,7 @@ body {
   content: "";
   position: fixed;
   inset: 0;
-  background: rgba(11, 25, 41, 0.45);
+  background: rgba(11, 25, 41, 0.72);
   z-index: -1;
 }
 
