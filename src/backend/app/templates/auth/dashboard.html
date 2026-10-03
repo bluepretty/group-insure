@@ -18,6 +18,7 @@
         <a class="nav-link" href="#" hx-get="/api/audit/recent" hx-target="#content">Audit log</a>
         {% if manage_users %}
         <a class="nav-link" href="#" hx-get="/api/users/list" hx-target="#content">Users</a>
+        <a class="nav-link" href="#" hx-get="/lookup-management/party_types" hx-target="#content">Reference data</a>
         {% endif %}
         <a class="nav-link mt-3" href="/api/auth/logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
       </nav>

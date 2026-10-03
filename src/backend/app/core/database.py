@@ -82,6 +82,13 @@ def create_schema() -> None:
             db = SessionLocal()
             try:
                 seed_reference_data(db)
+                # Bootstrap the single super-admin account if the users table
+                # is still empty, so a freshly deployed database always has one
+                # loginable admin (admin / admin) and no registration page is
+                # needed. No-op once a user already exists.
+                from app.services.reset import ensure_super_admin
+
+                ensure_super_admin()
             finally:
                 db.close()
             _SCHEMA_READY = True

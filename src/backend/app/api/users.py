@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
-from app.api.auth import require_role, require_user
+from app.api.auth import _has_permission, require_role, require_user
 from app.api.auth import User
 from app.core.database import get_db
 from app.services.audit import record_log
@@ -43,8 +43,12 @@ def list_users_endpoint(
 
 
 @router.get("/list")
-def user_list(request: Request, db: Session = Depends(get_db), _: User = Depends(require_user)) -> HTMLResponse:
-    return templates.TemplateResponse(request, "partials/user_list.html", {"users": list_users(db)})
+def user_list(request: Request, db: Session = Depends(get_db), user: User = Depends(require_user)) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "partials/user_list.html",
+        {"users": list_users(db), "can_reset": _has_permission(user, "manage_users")},
+    )
 
 
 @router.get("/{user_id}", response_model=None)

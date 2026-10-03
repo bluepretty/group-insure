@@ -48,9 +48,16 @@ def reset_database(
     The response reports the resulting credentials so the caller can log in
     immediately after the reset.
     """
-    username = body.username if body else None
-    password = body.password if body else None
+    # Forward a value only when the caller actually supplied it; otherwise leave
+    # it to ``reset_database``'s own defaults (``admin`` / ``admin``). Passing an
+    # explicit ``None`` here would shadow that default and insert a NULL into the
+    # NOT NULL ``username`` column.
+    kwargs = {}
+    if body and body.username:
+        kwargs["username"] = body.username
+    if body and body.password:
+        kwargs["password"] = body.password
     try:
-        return reset_service.reset_database(username=username, password=password)
+        return reset_service.reset_database(**kwargs)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

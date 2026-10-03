@@ -14,6 +14,12 @@ Every business table is emptied. ``users`` is then collapsed to a single
 super-admin account: ``admin`` / the value of ``DEFAULT_SUPER_ADMIN_PASSWORD``
 (defaults to ``admin``).
 """
+import logging
+
+from sqlalchemy import func, select
+
+logger = logging.getLogger(__name__)
+
 from app.core.database import SessionLocal
 from app.models.audit import AuditLog
 from app.models.benefit import Benefit
@@ -95,6 +101,43 @@ def reset_database(
             "message": "Database reset. All business data and audit log erased; one super-admin remains.",
             "admin_username": username,
         }
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def ensure_super_admin(
+    *,
+    username: str = DEFAULT_SUPER_ADMIN_USERNAME,
+    password: str | None = None,
+) -> dict | None:
+    """Create the default super-admin if the users table is empty.
+
+    Called once on startup (see ``app.core.database.create_schema``) so a
+    freshly seeded database always has one loginable super-admin. Idempotent:
+    if any user already exists it is a no-op and returns ``None`` so callers can
+    tell the difference between "already set up" and "created".
+    """
+    password = (password or DEFAULT_SUPER_ADMIN_PASSWORD)
+    if not password:
+        raise ValueError("Password must not be empty")
+
+    db = SessionLocal()
+    try:
+        if db.scalar(select(func.count()).select_from(User)):
+            return None
+        user = User(
+            username=username,
+            password=hash_password(password),
+            roles="admin",
+            active=True,
+        )
+        db.add(user)
+        db.commit()
+        logger.info("Created default super-admin (%s).", username)
+        return {"username": username}
     except Exception:
         db.rollback()
         raise
