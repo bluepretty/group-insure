@@ -1,52 +1,49 @@
 <div class="row g-3">
-  <div class="col-md-6">
-    <div class="card shadow-sm h-100">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="text-muted small text-uppercase">Policyholders</div>
-            <div class="h3 mb-0">{{ report.policyholders }}</div>
-          </div>
-          <i class="bi bi-building fa-2x text-primary"></i>
-        </div>
-      </div>
+  <div class="col-md-6 col-xl-3">
+    <div class="stat-card blue">
+      <div class="ic"><i class="bi bi-building"></i></div>
+      <div class="k">Policyholders</div>
+      <div class="v">{{ report.policyholders }}</div>
+      <div class="d">active accounts</div>
     </div>
   </div>
-  <div class="col-md-6">
-    <div class="card shadow-sm h-100">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="text-muted small text-uppercase">Active Policies</div>
-            <div class="h3 mb-0">{{ report.active_policies }}</div>
-          </div>
-          <i class="bi bi-shield-check fa-2x text-success"></i>
-        </div>
-      </div>
+  <div class="col-md-6 col-xl-3">
+    <div class="stat-card green">
+      <div class="ic"><i class="bi bi-shield-check"></i></div>
+      <div class="k">Active Policies</div>
+      <div class="v">{{ report.active_policies }}</div>
+      <div class="d">in force now</div>
     </div>
   </div>
-  <div class="col-md-6">
-    <div class="card shadow-sm h-100">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="text-muted small text-uppercase">Enrolled Members</div>
-            <div class="h3 mb-0">{{ report.members }}</div>
-          </div>
-          <i class="bi bi-people fa-2x text-info"></i>
-        </div>
-      </div>
+  <div class="col-md-6 col-xl-3">
+    <div class="stat-card teal">
+      <div class="ic"><i class="bi bi-people"></i></div>
+      <div class="k">Enrolled Members</div>
+      <div class="v">{{ report.members }}</div>
+      <div class="d">on all policies</div>
     </div>
   </div>
-  <div class="col-md-6">
-    <div class="card shadow-sm h-100">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="text-muted small text-uppercase">Open Claims</div>
-            <div class="h3 mb-0">{{ report.claims_open }}</div>
-          </div>
-          <i class="bi bi-clipboard-check fa-2x text-danger"></i>
+  <div class="col-md-6 col-xl-3">
+    <div class="stat-card amber">
+      <div class="ic"><i class="bi bi-clipboard-check"></i></div>
+      <div class="k">Open Claims</div>
+      <div class="v">{{ report.claims_open }}</div>
+      <div class="d">awaiting review</div>
+    </div>
+  </div>
+</div>
+<div class="row g-3">
+  <div class="col-12">
+    <div class="stat-card">
+      <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+          <div class="k">Enrolled premium</div>
+          <div class="v" style="margin-top:0.35rem;">${{ "%.2f"|format(report.enrolled_premium / 1000000) }}M</div>
+        </div>
+        <div class="d-flex flex-wrap gap-4" style="color:#8fa398; font-size:.85rem;">
+          <div>Policies live:<b style="color:#e9f0ec; font-weight:600;">{{ report.open_policies }}</b></div>
+          <div>Members:<b style="color:#e9f0ec; font-weight:600;">{{ report.members }}</b></div>
+          <div>Claims paid:<b style="color:#e9f0ec; font-weight:600;">${{ "%.2f"|format(report.claims_paid_total / 1000000) }}M</b></div>
         </div>
       </div>
     </div>

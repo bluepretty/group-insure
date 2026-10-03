@@ -3,35 +3,41 @@
 {% block title %}Dashboard — Group Insurance{% endblock %}
 
 {% block body %}
-<div class="container-fluid">
-  <div class="row mt-4">
-    <div class="col-md-3 col-lg-2 d-md-block sidebar">
-      <nav class="nav flex-column">
-        <a class="nav-link active" href="/"><i class="bi bi-house"></i> Dashboard</a>
-        <a class="nav-link" href="#" hx-get="/api/parties/list" hx-target="#content">Policyholders</a>
-        <a class="nav-link" href="#" hx-get="/api/products/list" hx-target="#content">Products</a>
-        <a class="nav-link" href="#" hx-get="/api/policies/list" hx-target="#content">Policies</a>
-        <a class="nav-link" href="#" hx-get="/api/members/list" hx-target="#content">Enrollment</a>
-        <a class="nav-link" href="#" hx-get="/api/premiums/detail" hx-target="#content">Coverage</a>
-        <a class="nav-link" href="#" hx-get="/api/claims/list" hx-target="#content">Claims</a>
-        <a class="nav-link" href="#" hx-get="/api/reports/list" hx-target="#content">Reports</a>
-        <a class="nav-link" href="#" hx-get="/api/audit/recent" hx-target="#content">Audit log</a>
-        {% if manage_users %}
-        <a class="nav-link" href="#" hx-get="/api/users/list" hx-target="#content">Users</a>
-        <a class="nav-link" href="#" hx-get="/lookup-management/party_types" hx-target="#content">Reference data</a>
-        {% endif %}
-        <a class="nav-link mt-3" href="/api/auth/logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
-      </nav>
+<div class="row g-0" style="min-height: calc(100vh - 2rem);">
+  <div class="col-md-3 col-lg-2 d-md-block sidebar">
+    <nav class="nav flex-column">
+      <a class="nav-link active" href="/"><i class="bi bi-grid-fill"></i> Dashboard</a>
+      <a class="nav-link" href="#" hx-get="/api/parties/list" hx-target="#content">Policyholders</a>
+      <a class="nav-link" href="#" hx-get="/api/products/list" hx-target="#content">Products</a>
+      <a class="nav-link" href="#" hx-get="/api/policies/list" hx-target="#content">Policies</a>
+      <a class="nav-link" href="#" hx-get="/api/members/list" hx-target="#content">Enrollment</a>
+      <a class="nav-link" href="#" hx-get="/api/premiums/detail" hx-target="#content">Coverage</a>
+      <a class="nav-link" href="#" hx-get="/api/claims/list" hx-target="#content">Claims</a>
+    </nav>
+    <div class="sep" style="font-size:.66rem; text-transform:uppercase; letter-spacing:.13em; color:#7d8ea0; margin:1.5rem 0 .5rem .8rem;">Insights</div>
+    <nav class="nav flex-column">
+      <a class="nav-link" href="#" hx-get="/api/reports/list" hx-target="#content">Reports</a>
+      <a class="nav-link" href="#" hx-get="/api/audit/recent" hx-target="#content">Audit log</a>
+    </nav>
+    {% if manage_users %}
+    <div class="sep" style="font-size:.66rem; text-transform:uppercase; letter-spacing:.13em; color:#7d8ea0; margin:1.5rem 0 .5rem .8rem;">System</div>
+    <nav class="nav flex-column">
+      <a class="nav-link" href="#" hx-get="/api/users/list" hx-target="#content">Users</a>
+      <a class="nav-link" href="#" hx-get="/lookup-management/party_types" hx-target="#content">Reference data</a>
+    </nav>
+    {% endif %}
+    <a class="nav-link mt-3" href="/api/auth/logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+  </div>
+  <div class="col-md-9 col-lg-10">
+    <div class="d-flex justify-content-between align-items-center" style="padding-bottom:1.2rem; border-bottom:1px solid #dbe2ea; margin-bottom:2rem;">
+      <div>
+        <h2 style="font-size:1.8rem; font-weight:700; margin:0; letter-spacing:-.02em;">Dashboard</h2>
+        <div style="color:#8fa398; font-size:.88rem; margin-top:.4rem;">Platform overview</div>
+      </div>
+      <span class="badge" style="background:#eef7ee; border:1px solid #cfe6cf; color:#2f9e44; font-size:.78rem; padding:.4rem .8rem; border-radius:999px; font-weight:600;">{{ user.username }} · {{ user.roles }}</span>
     </div>
-    <div class="col-md-9 col-lg-10">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="mb-0">Dashboard</h2>
-        <span class="badge bg-primary">{{ user.username }} · {{ user.roles }}</span>
-      </div>
-      <p class="text-muted">Welcome to your group insurance admin dashboard.</p>
-      <div id="content">
-        {% include "auth/overview_partial.html" %}
-      </div>
+    <div id="content">
+      {% include "auth/overview_partial.html" %}
     </div>
   </div>
 </div>
