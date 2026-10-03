@@ -75,7 +75,7 @@ cp src/backend/.env.example src/backend/.env
 Then set:
 
 ```
-GROUP_INSURE_DATABASE_URL=postgresql+psycopg2://group_insure:group_insure@localhost:5432/group_insure
+GROUP_INSURE_DATABASE_URL=postgresql://group_insure:group_insure@localhost:5432/group_insure
 GROUP_INSURE_JWT_SECRET=<your-production-secret>
 ```
 
@@ -114,61 +114,59 @@ cd src/backend
 uv run --extra dev pytest app/api/test_smoke.py
 ```
 
-## Deploy to Render (one click)
+## Deploy with Koyeb (free, no card required)
 
-Render has a free tier for both the web app and PostgreSQL, so you can run the whole
-stack live in a few minutes. The app auto-creates its schema on first boot, so you
-only need to deploy the repo and point it at the database.
+Koyeb is a free-tier host that doesn't require a credit card and deploys directly
+from your GitHub repo. It runs the FastAPI app; [Neon](#deploy-with-neon---no-card-required)
+provides the (also free, no-card) database. The app auto-creates its schema on
+first boot, so no manual SQL is needed.
 
-> **Prerequisite:** push this repo to GitHub first (see below). The "Deploy to
-> Render" button links to a GitHub repo.
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/bluepretty/group-insure)
-
-Render will spin up:
-
-- **Web Service** — your FastAPI app, built from the `Dockerfile` in this repo.
-- **PostgreSQL (Free tier)** — the production database; the app creates its tables on boot.
-
-> **Note:** Render's Postgres free tier requires a credit card on file (and the
-> free tier expires after ~90 days). If you want a no-card, free-tier database,
-> use [Neon](#deploy-with-neon--no-card-required) instead.
-
-### First — push the repo to GitHub
+### Prerequisite — push the repo to GitHub
 
 ```bash
 # from the repo root, using a new GitHub repo named "group_insure"
 git branch -M main
-git remote add origin https://github.com/<your-username>/group_insure.git
+git remote add origin https://github.com/<your-username>/group-insure.git
 git push -u origin main
 ```
 
-### Second — open the Deploy to Render button
+### 1. Create the app
+- Sign in at <https://www.koyeb.com> with **GitHub**.
+- Click **New Application**, then **FastAPI app** (or **New App → FastAPI**).
+- Connect the `group-insure` repo and select the `main` branch.
 
-After pushing, replace `<your-org>` in the button URL above with your GitHub
-username and click it. Render imports the repo and opens the deploy page with the
-service and database pre-configured.
+### 2. Build settings
+- **Build method:** Buildpack
+- **Run command:** `uv run uvicorn app.main:app --host 0.0.0.0`
+- **CPU:** Nano (the free default)
+- **Port:** `8000`
 
-Set (or confirm) these **Environment Variables** in the Render UI:
+> **Working directory:** this repo's app code lives in `src/backend`, and the app's
+> imports (`from app.main import app`) resolve only from there. If Koyeb asks for a
+> base/working directory, set it to `src/backend`. If it doesn't offer that option,
+> deploy via Docker instead (your repo already contains a `Dockerfile`).
+
+### 3. Environment variables
+Set these in the Koyeb app settings:
 
 | Variable | Value |
 |---|---|
-| `GROUP_INSURE_DATABASE_URL` | Render sets `GROUP_INSURE_DATABASE_URL` automatically to your new Postgres *Internal Database URL*. |
+| `GROUP_INSURE_DATABASE_URL` | Your Neon connection string — see [below](#deploy-with-neon---no-card-required), step 2. |
 | `GROUP_INSURE_JWT_SECRET` | A long random string — generate one with `openssl rand -hex 32`. |
 | `GROUP_INSURE_SMTP_ENABLED` | `false` (only flip to `true` once you add SMTP credentials). |
 
-Click **Deploy** and wait for the service to turn green, then open the app URL and
-register an account.
+### 4. Deploy
+Click **Deploy**. Koyeb auto-deploys from your repo, and each `git push` redeploys
+automatically — so after the first deploy, just push for updates (no dashboard needed).
 
-> **Note:** the button deploys a linked copy of this repo in your Render account.
-> To keep editing your local code, push new commits to GitHub and Render rebuilds
-> automatically — or connect the existing service to this repo's push.
+Once green, open the app URL and register an account to log in.
 
 ## Deploy with Neon — no card required
 
 [Neon](https://neon.com) offers a free, permanent PostgreSQL tier that doesn't
-require a credit card. It's the best option for long-term testing. The app works
-unchanged — you just point `GROUP_INSURE_DATABASE_URL` at Neon.
+require a credit card. It's the database (the app itself still needs a host like
+[Koyeb](#deploy-with-koyeb--free--no-card-required)); the app works unchanged —
+you just point `GROUP_INSURE_DATABASE_URL` at Neon.
 
 ### 1. Create a Neon project
 - Sign up at <https://neon.com>
@@ -183,26 +181,76 @@ unchanged — you just point `GROUP_INSURE_DATABASE_URL` at Neon.
   postgresql://user:pass@ep-xxx-east-2.neon.tech/neondb?sslmode=require
   ```
 
-- Your app uses the `psycopg2` driver, so change the scheme to
-  `postgresql+psycopg2://` (drop the `s` from `postgres`, keep the rest):
+- Your app uses the `psycopg[binary]` driver (psycopg v3), so the plain
+  `postgresql://` scheme works as-is — no driver suffix needed:
 
   ```
-  postgresql+psycopg2://user:pass@ep-xxx-east-2.neon.tech/neondb?sslmode=require
+  postgresql://user:pass@ep-xxx-east-2.neon.tech/neondb?sslmode=require
   ```
 
-### 3. Configure Render (or any host)
+> **Pooled vs. direct:** use the **direct** connection string (no `-pooler` in
+> the host) for this app. Your app runs `create_all()` at startup to build the
+> schema, and PgBouncer (the `-pooler` route) runs in transaction mode, which can
+> interfere with table creation. Take the direct string from Neon's **Connection
+> Info** dialog (toggle "Connection pooling" off).
+
+### 3. Configure your host (Koyeb)
 On the deploy page, set:
 
 | Variable | Value |
 |---|---|
 | `GROUP_INSURE_DATABASE_URL` | The `postgresql+psycopg2://` string from step 2. |
-| `GROUP_INSURE_JWT_SECRET` | Auto-generated by Render, or set one. |
+| `GROUP_INSURE_JWT_SECRET` | A long random string — generate one with `openssl rand -hex 32`. |
 | `GROUP_INSURE_SMTP_ENABLED` | `false` |
 
 The app auto-creates its schema on first boot, so no manual SQL is needed.
 
-> **Free tier limits:** 1 GB storage + 100 CU-hours/month, no card required.
+> **Free tier limits:** ~1 GB storage + 100 CU-hours/month, no card required.
 > Enough for testing; a typical deployment stays well under these limits.
+
+## Quick start — velixir (free, no card) + Neon
+
+The simplest no-card stack. **velixir** (velixir.net) runs your FastAPI app;
+[Neon](#deploy-with-neon---no-card-required) provides the database. Both are free
+and neither requires a credit card. velixir runs in the EU and sleeps when idle
+(first request after idle takes a few seconds to warm up).
+
+### Prerequisite — push the repo to GitHub
+
+```bash
+git branch -M main
+git remote add origin https://github.com/<your-username>/group-insure.git
+git push -u origin main
+```
+
+### 1. Set up Neon (the database)
+- Sign in at <https://neon.com> → **New Project** → `group-insure`.
+- Open the project → **Connection Info** → copy the connection string.
+- Change the scheme to `postgresql+psycopg2://` for your app:
+
+  ```
+  postgresql+psycopg2://user:pass@ep-xxx-east-2.neon.tech/neondb?sslmode=require
+  ```
+
+### 2. Deploy the app on velixir
+- Sign in at <https://velixir.net> with **GitHub** (free tier, no card).
+- Push your source to velixir via its CLI (or GitHub Actions).
+- velixir auto-detects the Python runtime and builds it — **no Dockerfile needed**.
+- Set these environment variables in the velixir app settings:
+
+| Variable | Value |
+|---|---|
+| `GROUP_INSURE_DATABASE_URL` | Your `postgresql+psycopg2://` Neon string from step 1. |
+| `GROUP_INSURE_JWT_SECRET` | A long random string — `openssl rand -hex 32`. |
+| `GROUP_INSURE_SMTP_ENABLED` | `false` |
+
+> **Working directory:** your app code lives in `src/backend`, and `from app.main
+> import app` resolves only from there. If velixir can't find the app, set the base
+> directory to `src/backend` in the app settings.
+
+### 3. Verify
+The app auto-creates its schema on first boot, then open the velixir URL and
+register an account. Each `git push` redeploys automatically.
 
 ## Database notes
 
