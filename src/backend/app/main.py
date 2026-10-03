@@ -78,24 +78,14 @@ from app import models  # noqa: E402,F401
 
 @app.on_event("startup")
 def on_startup() -> None:
-    # Ensure the database is reachable before touching it. Free-tier
-    # providers (e.g. Neon) scale compute to zero and refuse the first
-    # connection after idle; this retries with a backoff instead of
-    # crash-looping.
-    from app.core.database import connect_with_retry
+    # Bootstrap the database in the background without blocking the
+    # startup probe. Free-tier providers (e.g. Neon) scale compute to
+    # zero and refuse the first connection after idle; blocking startup
+    # on that connection would crash-loop the service. Instead we become
+    # ready immediately and let schema creation retry in the background.
+    from app.core.database import init_database
 
-    connect_with_retry()
-    Base.metadata.create_all(bind=engine)
-    # Seed the reference/lookup tables so the app is usable against a fresh
-    # database (and idempotent on every restart).
-    from app.services.lookup import seed_reference_data
-    from app.core.database import SessionLocal
-
-    db = SessionLocal()
-    try:
-        seed_reference_data(db)
-    finally:
-        db.close()
+    init_database()
 
 
 @app.get("/health")
